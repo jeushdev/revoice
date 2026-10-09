@@ -58,6 +58,11 @@ enum CrmEvidence {
             guard let text = value as? String, let ids = find(text, in: lines, verbatimOnly: verbatimOnly) else { return }
             sources[path] = ids
         }
+        // follow_up must be a concrete next action. A 1.5B model sometimes copies a pleasantry line
+        // ("Thanks, David. Thanks. Thanks."); that is removed rather than shown as a follow-up.
+        if let followUp = card["follow_up"] as? String, !isConcreteAction(followUp) {
+            card["follow_up"] = NSNull()
+        }
         for key in ["name", "role", "organization", "follow_up", "notes"] {
             cite(key, card[key])
         }
@@ -80,6 +85,25 @@ enum CrmEvidence {
             let text = String(data: data, encoding: .utf8)
         else { return json }
         return text
+    }
+
+    // MARK: - Follow-up sanity
+
+    /// Words that carry no action: greetings, thanks, goodbyes, acknowledgements, filler.
+    private static let pleasantries: Set<String> = [
+        "thanks", "thank", "you", "hi", "hello", "hey", "bye", "goodbye", "ok", "okay", "great", "good",
+        "sure", "yes", "yeah", "yep", "no", "nice", "welcome", "cheers", "sounds", "perfect", "fine",
+        "alright", "right", "see", "later", "again", "talk", "soon", "please", "sorry", "well", "so",
+        "all", "much", "very", "too", "meet", "morning", "afternoon", "evening", "night", "day", "have",
+    ]
+
+    /// True if `text` plausibly names something to DO: after removing greetings, thanks and
+    /// filler there must be at least two meaningful words left (a lone name such as "David" or a
+    /// lone day such as "Friday" is not an action).
+    static func isConcreteAction(_ text: String) -> Bool {
+        let words = normalize(text).split(separator: " ").map(String.init)
+        let meaningful = words.filter { !pleasantries.contains($0) && !stopwords.contains($0) }
+        return Set(meaningful).count >= 2
     }
 
     // MARK: - Matching

@@ -56,7 +56,7 @@ enum ReviseGrammars {
     /// any real conversation.
     static let crmSystem = #"""
     You are a careful information extractor. Reply with one JSON object and nothing else.
-    Fill a field only with facts the person stated. Every filled field and every list item must be listed in source_segments with the [segment ids] of the lines that state it. Copy emails, phone numbers and dates exactly as spoken. contact_mentioned is ONLY an email address or phone number the person said; otherwise null. If a fact is not stated, use null (or []).
+    Fill a field only with facts the person stated. Every filled field and every list item must be listed in source_segments with the [segment ids] of the lines that state it. Copy emails, phone numbers and dates exactly as spoken. contact_mentioned is ONLY an email address or phone number the person said; otherwise null. follow_up is ONLY a concrete next action (never thanks, greetings or goodbyes); otherwise null. If a fact is not stated, use null (or []).
 
     Example transcript:
     [s-0002] I'm Ben, I run operations at Delta Foods.
@@ -69,7 +69,7 @@ enum ReviseGrammars {
     /// System prompt matching `crmValuesOnly`: same worked-example style, no citation rules.
     static let crmValuesOnlySystem = #"""
     You are a careful information extractor. Reply with one JSON object and nothing else.
-    Fill a field only with facts the person stated. Copy emails, phone numbers and dates exactly as spoken. contact_mentioned is ONLY an email address or phone number the person said; otherwise null. If a fact is not stated, use null (or []). Always write "source_segments": {} exactly.
+    Fill a field only with facts the person stated. Copy emails, phone numbers and dates exactly as spoken. contact_mentioned is ONLY an email address or phone number the person said; otherwise null. follow_up is ONLY a concrete next action someone must take (for example "send the contract on Monday"); greetings, thanks and goodbyes are never a follow_up, use null. If a fact is not stated, use null (or []). Always write "source_segments": {} exactly.
 
     Example transcript:
     [s-0002] I'm Ben, I run operations at Delta Foods.

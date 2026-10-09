@@ -188,6 +188,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = NQB4BL3X99;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ReVise listens to the conversation to caption it. Audio never leaves this phone.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -328,6 +329,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = NQB4BL3X99;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "ReVise listens to the conversation to caption it. Audio never leaves this phone.";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
