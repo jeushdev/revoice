@@ -30,6 +30,20 @@ Future<SavedSession> startSession(WidgetTester tester, AppState app) async {
 }
 
 void main() {
+  // The background drift and mic pulse loop forever; the system "reduce
+  // motion" setting stops them so pumpAndSettle can settle.
+  setUp(() {
+    TestWidgetsFlutterBinding.ensureInitialized()
+        .platformDispatcher
+        .accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(
+      disableAnimations: true,
+    );
+  });
+  tearDown(
+    () => TestWidgetsFlutterBinding.instance.platformDispatcher
+        .clearAccessibilityFeaturesTestValue(),
+  );
+
   testWidgets('record, stop, transcript and profiles with mock data', (
     tester,
   ) async {

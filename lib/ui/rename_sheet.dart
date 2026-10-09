@@ -27,6 +27,11 @@ Future<void> showRenameSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    sheetAnimationStyle: const AnimationStyle(
+      duration: Duration(milliseconds: 420),
+      reverseDuration: Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    ),
     builder: (_) => _RenameSheet(session: session, speakerId: speakerId),
   );
   if (name != null) session.rename(speakerId, name);

@@ -1,4 +1,8 @@
+import 'dart:math' as math;
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 /// Design tokens from "ReVise Mockups v3" (iOS liquid glass), light and dark.
 @immutable
@@ -42,7 +46,7 @@ class ReviseColors extends ThemeExtension<ReviseColors> {
     glowA: Color(0x5571B7FF),
     glowB: Color(0x40B9E2FF),
     liveBg: Color(0xFFF7FBFF),
-    surf: Color(0x9EFFFFFF),
+    surf: Color(0x6BFFFFFF),
     sheet: Color(0xCCFFFFFF),
     surf2: Color(0xFFF2F2F7),
     surf3: Color(0xFFE5E5EA),
@@ -70,7 +74,7 @@ class ReviseColors extends ThemeExtension<ReviseColors> {
     glowA: Color(0x661A4FA8),
     glowB: Color(0x40103A7A),
     liveBg: Color(0xFF030814),
-    surf: Color(0x8C1A2844),
+    surf: Color(0x5C1A2844),
     sheet: Color(0xDB0E182C),
     surf2: Color(0xFF2C2C2E),
     surf3: Color(0xFF3A3A3C),
@@ -163,6 +167,13 @@ ThemeData buildTheme(Brightness brightness) {
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    // iOS-style slide with swipe-back on both platforms, to match the design.
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+        TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      },
+    ),
   );
 }
 
@@ -171,3 +182,16 @@ extension ReviseColorsX on BuildContext {
   Brightness get brightness => Theme.of(this).brightness;
   SpeakerHue hue(int speakerId) => speakerHue(speakerId, brightness);
 }
+
+/// Shared liquid-glass look for the tab bar and the mic orb.
+LiquidGlassSettings liquidSettings(bool dark) => LiquidGlassSettings(
+  thickness: 28,
+  blur: 6,
+  refractiveIndex: 1.22,
+  saturation: 1.6,
+  chromaticAberration: .015,
+  lightAngle: math.pi / 4,
+  lightIntensity: dark ? .7 : 1,
+  ambientStrength: dark ? .2 : .45,
+  glassColor: dark ? const Color(0x401A2844) : const Color(0x4DFFFFFF),
+);

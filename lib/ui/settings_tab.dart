@@ -235,31 +235,54 @@ class Segmented extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.rc;
     final dark = context.brightness == Brightness.dark;
-    Widget seg(int i) => GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(i),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: i == index
-              ? (dark ? c.surf3 : Colors.white)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(9),
-          boxShadow: i == index && !dark
-              ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 4)]
-              : null,
-        ),
-        child: Text(
-          options[i],
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: i == index ? FontWeight.w600 : FontWeight.w500,
-            color: c.ink,
+    final n = options.length;
+    Widget seg(int i) => Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(i),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+          child: Center(
+            child: AnimatedDefaultTextStyle(
+              duration: const Duration(milliseconds: 200),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: i == index ? FontWeight.w600 : FontWeight.w500,
+                color: c.ink,
+              ),
+              child: Text(options[i], maxLines: 1, softWrap: false),
+            ),
           ),
         ),
       ),
+    );
+    // Equal-width segments so the thumb can slide between them.
+    final row = Stack(
+      children: [
+        Positioned.fill(
+          child: AnimatedAlign(
+            duration: const Duration(milliseconds: 340),
+            curve: Curves.easeOutBack,
+            alignment: Alignment(n == 1 ? 0 : -1 + 2 * index / (n - 1), 0),
+            child: FractionallySizedBox(
+              widthFactor: 1 / n,
+              heightFactor: 1,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: dark ? c.surf3 : Colors.white,
+                  borderRadius: BorderRadius.circular(9),
+                  boxShadow: dark
+                      ? null
+                      : const [
+                          BoxShadow(color: Color(0x1F000000), blurRadius: 4),
+                        ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Row(children: [for (var i = 0; i < n; i++) seg(i)]),
+      ],
     );
     return Container(
       padding: const EdgeInsets.all(2),
@@ -267,13 +290,7 @@ class Segmented extends StatelessWidget {
         color: dark ? c.surf2 : c.surf3.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(11),
       ),
-      child: Row(
-        mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
-        children: [
-          for (var i = 0; i < options.length; i++)
-            expand ? Expanded(child: seg(i)) : seg(i),
-        ],
-      ),
+      child: expand ? row : IntrinsicWidth(child: row),
     );
   }
 }

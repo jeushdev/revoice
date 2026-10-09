@@ -295,12 +295,23 @@ class _ProfilesCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(3),
-                  child: LinearProgressIndicator(
-                    value: cards.isEmpty ? null : done / cards.length,
-                    minHeight: 5,
-                    color: c.primaryFill,
-                    backgroundColor: c.surf,
-                  ),
+                  child: cards.isEmpty
+                      ? LinearProgressIndicator(
+                          minHeight: 5,
+                          color: c.primaryFill,
+                          backgroundColor: c.surf,
+                        )
+                      : TweenAnimationBuilder<double>(
+                          tween: Tween(end: done / cards.length),
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, v, _) => LinearProgressIndicator(
+                            value: v,
+                            minHeight: 5,
+                            color: c.primaryFill,
+                            backgroundColor: c.surf,
+                          ),
+                        ),
                 ),
               ],
             ],

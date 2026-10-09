@@ -367,39 +367,42 @@ class _LiveScreenState extends State<LiveScreen> {
       itemCount: lines.length,
       itemBuilder: (context, i) {
         final seg = lines[i];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 22),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  SessionSpeakerPill(
-                    session: session,
-                    speakerId: seg.speakerId,
-                    onRename: _rename,
-                    showEdit: true,
-                  ),
-                  const Spacer(),
-                  Text(
-                    formatMs(seg.tStartMs),
-                    style: TextStyle(fontSize: 13, color: c.ink3),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              CaptionText(
-                text: seg.text,
-                partial: !seg.isFinal,
-                style: TextStyle(
-                  fontSize: size,
-                  height: 1.25,
-                  fontWeight: FontWeight.w500,
-                  color: c.ink,
+        return FadeInOnce(
+          key: ValueKey(seg.id),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 22),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    SessionSpeakerPill(
+                      session: session,
+                      speakerId: seg.speakerId,
+                      onRename: _rename,
+                      showEdit: true,
+                    ),
+                    const Spacer(),
+                    Text(
+                      formatMs(seg.tStartMs),
+                      style: TextStyle(fontSize: 13, color: c.ink3),
+                    ),
+                  ],
                 ),
-                cursorColor: c.primary,
-              ),
-            ],
+                const SizedBox(height: 8),
+                CaptionText(
+                  text: seg.text,
+                  partial: !seg.isFinal,
+                  style: TextStyle(
+                    fontSize: size,
+                    height: 1.25,
+                    fontWeight: FontWeight.w500,
+                    color: c.ink,
+                  ),
+                  cursorColor: c.primary,
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -427,20 +430,26 @@ class CaptionText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = style.color!;
-    return Text.rich(
-      TextSpan(
-        style: style.copyWith(
-          color: partial ? color.withValues(alpha: 0.55) : color,
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: partial ? 0.55 : 1),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+      builder: (context, alpha, _) => Text.rich(
+        TextSpan(
+          style: style.copyWith(color: color.withValues(alpha: alpha)),
+          children: [
+            ?prefix,
+            TextSpan(text: text),
+            if (partial)
+              TextSpan(
+                text: '|',
+                style: TextStyle(
+                  color: cursorColor,
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+          ],
         ),
-        children: [
-          ?prefix,
-          TextSpan(text: text),
-          if (partial)
-            TextSpan(
-              text: '|',
-              style: TextStyle(color: cursorColor, fontWeight: FontWeight.w300),
-            ),
-        ],
       ),
     );
   }
@@ -460,30 +469,41 @@ class _StatePill extends StatelessWidget {
       EngineState.stopped => ('Stopped', c.surf2, c.ink2, c.ink3),
       _ => ('Starting', c.surf2, c.ink2, c.ink3),
     };
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOut,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: fg,
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 260),
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
             ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              child: Text(
+                label,
+                key: ValueKey(label),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: fg,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -161,11 +161,18 @@ class _LandscapeCaptionsState extends State<LandscapeCaptions> {
                         child: Center(child: _pausedPill(c)),
                       ),
                     AnimatedPositioned(
-                      duration: const Duration(milliseconds: 200),
+                      duration: const Duration(milliseconds: 380),
+                      curve: _controls
+                          ? Curves.easeOutBack
+                          : Curves.easeInCubic,
                       top: _controls ? 8 : -80,
                       left: 0,
                       right: 0,
-                      child: Center(child: _controlsPill(app, c)),
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 240),
+                        opacity: _controls ? 1 : 0,
+                        child: Center(child: _controlsPill(app, c)),
+                      ),
                     ),
                   ],
                 ),
@@ -192,27 +199,32 @@ class _LandscapeCaptionsState extends State<LandscapeCaptions> {
       _ => 0.4,
     };
     final nameColor = brightness == Brightness.dark ? hue.dot : hue.fg;
-    return Opacity(
-      opacity: opacity,
-      child: Container(
-        margin: const EdgeInsets.only(top: 14),
-        padding: const EdgeInsets.only(left: 16),
-        decoration: BoxDecoration(
-          border: Border(left: BorderSide(color: hue.dot, width: 5)),
-        ),
-        child: CaptionText(
-          text: seg.text,
-          partial: !seg.isFinal,
-          cursorColor: cursor,
-          prefix: TextSpan(
-            text: '${session.displayName(seg.speakerId)}: ',
-            style: TextStyle(color: nameColor),
+    return FadeInOnce(
+      key: ValueKey(seg.id),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+        opacity: opacity,
+        child: Container(
+          margin: const EdgeInsets.only(top: 14),
+          padding: const EdgeInsets.only(left: 16),
+          decoration: BoxDecoration(
+            border: Border(left: BorderSide(color: hue.dot, width: 5)),
           ),
-          style: TextStyle(
-            fontSize: size,
-            height: 1.15,
-            fontWeight: FontWeight.w700,
-            color: ink,
+          child: CaptionText(
+            text: seg.text,
+            partial: !seg.isFinal,
+            cursorColor: cursor,
+            prefix: TextSpan(
+              text: '${session.displayName(seg.speakerId)}: ',
+              style: TextStyle(color: nameColor),
+            ),
+            style: TextStyle(
+              fontSize: size,
+              height: 1.15,
+              fontWeight: FontWeight.w700,
+              color: ink,
+            ),
           ),
         ),
       ),

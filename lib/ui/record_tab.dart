@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 import 'live_screen.dart';
 import 'theme.dart';
@@ -195,58 +196,118 @@ class _TipsCarouselState extends State<_TipsCarousel> {
   }
 }
 
-/// Blue glass orb mic button.
-class _MicOrb extends StatelessWidget {
+/// Mic button: a blue core under a liquid-glass lens, with a slow
+/// breathing glow behind it.
+class _MicOrb extends StatefulWidget {
   const _MicOrb({required this.onTap});
   final VoidCallback onTap;
 
   @override
+  State<_MicOrb> createState() => _MicOrbState();
+}
+
+class _MicOrbState extends State<_MicOrb> with SingleTickerProviderStateMixin {
+  late final _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2600),
+  );
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _pulse.stop();
+    } else if (!_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final dark = context.brightness == Brightness.dark;
+    final breath = CurvedAnimation(parent: _pulse, curve: Curves.easeInOut);
     return Semantics(
       button: true,
       label: 'Start session',
       child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 196,
-          height: 196,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: dark ? 0.10 : 0.55),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: dark ? 0.18 : 0.9),
-              width: 1.5,
+        onTap: widget.onTap,
+        child: LiquidStretch(
+          stretch: .4,
+          interactionScale: 1.06,
+          child: SizedBox.square(
+            dimension: 236,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: breath,
+                  builder: (context, _) => Container(
+                    width: 200 + 30 * breath.value,
+                    height: 200 + 30 * breath.value,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          const Color(0xFF2F7BFF)
+                              .withValues(alpha: .45 - .2 * breath.value),
+                          const Color(0x002F7BFF),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 168,
+                  height: 168,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      center: const Alignment(-0.35, -0.45),
+                      radius: 0.95,
+                      colors: dark
+                          ? const [
+                              Color(0xFF3F7FE0),
+                              Color(0xFF123F9A),
+                              Color(0xFF071F55),
+                            ]
+                          : const [
+                              Color(0xFF4F95FF),
+                              Color(0xFF0D55C9),
+                              Color(0xFF063383),
+                            ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0A5FD6).withValues(alpha: .35),
+                        blurRadius: 40,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                ),
+                LiquidGlass.withOwnLayer(
+                  settings: liquidSettings(dark).copyWith(
+                    thickness: 40,
+                    glassColor: Colors.white.withValues(alpha: .06),
+                  ),
+                  shape: const LiquidOval(),
+                  child: const SizedBox.square(
+                    dimension: 192,
+                    child: Icon(
+                      Icons.mic_rounded,
+                      size: 84,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0A5FD6).withValues(alpha: 0.35),
-                blurRadius: 40,
-                offset: const Offset(0, 16),
-              ),
-            ],
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: RadialGradient(
-                center: const Alignment(-0.35, -0.45),
-                radius: 0.95,
-                colors: dark
-                    ? const [
-                        Color(0xFF3F7FE0),
-                        Color(0xFF123F9A),
-                        Color(0xFF071F55),
-                      ]
-                    : const [
-                        Color(0xFF4F95FF),
-                        Color(0xFF0D55C9),
-                        Color(0xFF063383),
-                      ],
-              ),
-            ),
-            child: const Icon(Icons.mic_rounded, size: 84, color: Colors.white),
           ),
         ),
       ),
