@@ -1,13 +1,80 @@
-# Android third-party inventory
+# Android model notices
 
-This is the development inventory, not a completed redistribution notice bundle. Do not distribute the APK until exact packaged SDK/model notices and the accepted Gemma terms have been collected. No model weights are committed to this repository.
+Asset selection/preparation only. Runtime dependency and APK license inventories
+must be completed after the Android build exists. Preserve these notices and the
+applicable complete license texts in any distributed installation.
 
-| Item | Exact selection | Publisher source / notice status |
-| --- | --- | --- |
-| Moonshine Android | `ai.moonshine:moonshine-voice:0.1.5`, source `234f60faa0eb388b01cdf7e60aca232af37aefda` | [Publisher license](https://github.com/moonshine-ai/moonshine/blob/v0.1.5/LICENSE); include its copyright/license and the native/transitive component notices |
-| Speech weights | English Tiny Streaming `quantized_26_08_21` | Selected files/hashes in `model-manifest.json`; publisher license describes streaming/English models under MIT; preserve the applicable license text |
-| Diarization weights | Moonshine `diarization-community1`, segmentation and embedding | [Publisher origin documentation](https://github.com/moonshine-ai/moonshine/blob/v0.1.5/docs/diarization-models.md) identifies pyannote community-1; obtain the corresponding upstream model notices/conditions rather than assuming the STT license covers these files |
-| LiteRT-LM Android | `com.google.ai.edge.litertlm:litertlm-android:0.18.0` | [Publisher license](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.0/LICENSE); Maven POM declares Apache-2.0; preserve native/transitive notices too |
-| Gemma weights | `gemma3-1b-it-int4.litertlm`, revision `a6306a4e292016480083b73b8dc6f3f939ae04c3` | [Pinned model repository](https://huggingface.co/litert-community/Gemma3-1B-IT/tree/a6306a4e292016480083b73b8dc6f3f939ae04c3), [Gemma terms](https://ai.google.dev/gemma/terms); authorized acquisition and redistribution notice collection pending |
+## Moonshine English Tiny Streaming
 
-The LiteRT 0.18.0 POM resolves Gson 2.14.0, Kotlin reflect 2.4.0, and kotlinx-coroutines-android 1.11.0. This is publisher dependency metadata, not the final app's resolved dependency lock. Record the actual combined build and collect notices from its resolved artifacts, including Moonshine's native libraries.
+- Publisher: Moonshine AI / Useful Sensors, Inc.
+- SDK/source: `v0.1.5`, commit `234f60faa0eb388b01cdf7e60aca232af37aefda`.
+- Weights: `tiny-streaming-en/quantized_26_08_21`, downloaded unchanged.
+- License: **MIT**, copyright (c) 2025 Useful Sensors, Inc. (dba Moonshine AI).
+- Preserved publisher text: `models/licenses/MOONSHINE-LICENSE.txt`.
+  The file also describes other, unselected non-streaming models' Community
+  License; those restrictions do not apply to the selected English streaming STT.
+- Source: <https://github.com/moonshine-ai/moonshine/tree/v0.1.5>.
+
+## Diarization models (not covered merely by the STT license)
+
+- Source models: **pyannote speaker-diarization-community-1**.
+- Original publisher license: **Creative Commons Attribution 4.0 International**
+  (`CC-BY-4.0`), as declared in preserved publisher metadata
+  `models/provenance/pyannote-metadata.json` (revision
+  `3533c8cf8e369892e6b79ff1bf80f7b0286a54ee`). This revision documents upstream
+  licensing, not a claim about the exact original weights' conversion revision.
+- Source: <https://huggingface.co/pyannote/speaker-diarization-community-1>.
+- License: <https://creativecommons.org/licenses/by/4.0/>; full text in
+  `models/licenses/CC-BY-4.0.txt`.
+- Changes: Moonshine converted the segmentation and speaker-embedding models to
+  ORT format; ReVise uses Moonshine's `diarization-community1/segmentation.ort`
+  and `embedding.ort` unchanged. See the pinned
+  [Moonshine diarization documentation](https://github.com/moonshine-ai/moonshine/blob/v0.1.5/docs/diarization-models.md).
+- Attribution from the upstream model card:
+  - Alexis Plaquet and Herve Bredin, *Powerset multi-class cross entropy loss for
+    neural speaker diarization*, INTERSPEECH 2023 (segmentation).
+  - Hongji Wang et al., *Wespeaker: A research and production oriented speaker
+    embedding learning toolkit*, ICASSP 2023 (embedding).
+  - Federico Landini et al., *Bayesian HMM clustering of x-vector sequences (VBx)
+    in speaker diarization: theory, implementation and analysis on standard
+    tasks*, Computer Speech & Language, 2022 (clustering).
+- The cpp-annote implementation has a separate MIT notice, copyright (c) 2026
+  Useful Sensors, Inc. (dba Moonshine AI), preserved in
+  `models/licenses/CPP-ANNOTE-LICENSE.txt`. It is not a replacement for the
+  upstream models' attribution/license.
+
+## Gemma 3 1B IT INT4
+
+- Original model publisher: Google. LiteRT deployment repository:
+  `litert-community/Gemma3-1B-IT`.
+- Revision: `a6306a4e292016480083b73b8dc6f3f939ae04c3`.
+- Selected converted file: `gemma3-1b-it-int4.litertlm`; no additional ReVise
+  conversion/fine-tuning or binary modification.
+- License: **Gemma Terms of Use**, not MIT or Apache for these model weights.
+- Official terms: <https://ai.google.dev/gemma/terms>.
+- Prohibited-use policy: <https://ai.google.dev/gemma/prohibited_use_policy>.
+- Complete publisher pages preserved on October 9, 2026 as
+  `models/licenses/GEMMA-TERMS.html` and `GEMMA-PROHIBITED-USE.html`.
+- Required Notice text under the terms:
+
+  > Gemma is provided under and subject to the Gemma Terms of Use found at
+  > ai.google.dev/gemma/terms
+
+  Also preserved verbatim in `models/licenses/GEMMA-NOTICE.txt` for packaging.
+
+The authorized developer obtains access and accepts terms personally. ReVise
+must provide the agreement/Notice and reflect applicable use restrictions in
+downstream distribution terms before distributing the model in an APK. A local
+checksum pass is not legal clearance or inference verification.
+
+## LiteRT-LM runtime and combined APK inventory
+
+- Runtime: `com.google.ai.edge.litertlm:litertlm-android:0.18.0`.
+- Publisher license: [LiteRT-LM Apache-2.0 license](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.0/LICENSE).
+- Its Maven POM declares Gson 2.14.0, Kotlin reflect 2.4.0 and
+  kotlinx-coroutines-android 1.11.0. Record the application's actual resolved
+  dependency inventory and preserve native/transitive notices after integration.
+- The publisher/model license snapshots above are preserved from devJ's work.
+  Packaging them into the final APK, the complete SDK notice inventory and
+  redistribution review remain pending. This document does not claim a completed
+  application build or phone inference verification.

@@ -54,3 +54,36 @@ Override `-KotlinCompiler`/`-Java` for another machine. The exact shared-shell K
 ## Required completion evidence
 
 Follow [Android integration instructions](../../../android-backend.md) and the implementation plan's device gates. Record actual commands/results/device properties and aggregate measurements without transcripts/prompts. Keep the PR in draft while integrated builds/device checks are outstanding, or explicitly split a reviewed interface/core milestone from the final runtime acceptance.
+
+## Incoming Kotlin branch merge
+
+Fetched `codex/kotlin-development` at **`cf88c86`**, incorporating devJ's model
+preparation commit **`3dcfcaf`**. Remote `main` remained **`fa1fd2f`**; pulling main
+would not have incorporated these changes. Merged integration into the devS
+feature branch rather than changing main or the integration branch directly.
+
+Four add/add conflicts were reconciled: `.gitignore`, `THIRD_PARTY_NOTICES.md`,
+the runtime manifest and the PowerShell entry point. Preserved devJ's locks,
+publisher provenance, license snapshots, Python tools and tests; preserved devS's
+native runtime/controller and dependency-free PowerShell verification.
+
+Fixed the incompatible `bytes` versus `sizeBytes` manifest schema. Python now
+emits the same fixed `group`/`sizeBytes` inventory consumed by Kotlin and Gradle.
+The Python wrapper is `prepare-android-models-python.ps1`; existing native
+PowerShell commands keep their original name. Per-machine verification status
+lives outside APK assets in ignored `work/android-model-preparation-report.json`.
+
+Post-merge checks: **33 Kotlin checks, 19 Python tests, 11 PowerShell checks passed**;
+native/channel API compilation passed; both preparation implementations verified
+all ten local speech files offline. Python regression tests compare generated
+inventory with the actual committed native manifest and reject malformed locks.
+
+Tests used bundled Python (`.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe`)
+because this machine's PATH entry points to the Windows Store alias. Gemma remains
+absent locally. devJ's historical full-model verification is preserved in
+`docs/evidence/android/MODEL_PREPARATION.md`, with its originating-checkout scope
+made explicit. Full Flutter build/native-device gates remain unchanged.
+
+First-party source/docs passed the staged whitespace check. Preserved publisher
+license/provenance snapshots are unchanged from incoming Git blobs and excluded
+from whitespace lint because their original text contains trailing whitespace.

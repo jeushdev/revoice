@@ -21,10 +21,40 @@
 /android/app/debug/
 /android/app/profile/
 /android/app/release/
-
 # Packaged locally; never commit model binaries or incomplete downloads.
 /android/app/src/main/assets/revise/models/
 *.litertlm
 *.gguf
 *.ort
 *.partial
+# Additional shared build/model tooling exclusions
+# Downloaded dependencies and generated build output.
+.gradle/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+build/
+.flutter-plugins
+/ios/Pods/
+/ios/.symlinks/
+**/Flutter/ephemeral/
+.venv/
+venv/
+# Generated Android installation packages.
+*.apk
+*.aab
+*.ap_
+# Local model binaries; manifests, locks, provenance, and notices remain versionable.
+/models/**/*.ort
+/models/**/*.onnx
+/models/**/*.litertlm
+/models/**/*.gguf
+/models/**/*.safetensors
+/models/**/*.tflite
+/models/**/*.task
+*.part
+# Python caches.
+__pycache__/
+*.pyc
+# Local configuration and secrets.
+/android/local.properties

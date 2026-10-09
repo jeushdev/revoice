@@ -19,6 +19,7 @@ PowerShell 7, a Kotlin compiler and Java 17+ are required. The test script defau
 ```powershell
 ./scripts/test-android-backend.ps1
 ./tests/scripts/prepare-android-models.tests.ps1
+python -m unittest discover -s scripts/tests -v
 ```
 
 The first command exercises lifecycle and asset logic with fake runtime/speech boundaries. It can also compile against actual Android, LiteRT and Flutter API jars; see its parameter help. These checks do not execute Android native libraries.
@@ -36,3 +37,8 @@ The first command exercises lifecycle and asset logic with fake runtime/speech b
 ```
 
 Gemma acquisition/terms are handled by the developer. The script verifies the pinned local file and never downloads it or reads a token. Model binaries stay out of Git. Application code reads only packaged local assets; it does not run the preparation script or fetch models.
+
+devJ's Python preparation/authorized-download workflow is preserved separately in
+`scripts/prepare-android-models-python.ps1`; see [Android model preparation](docs/ANDROID_MODELS.md).
+Both tools use the same runtime inventory. Pulling a model manifest does not pull
+the ignored model binaries or establish local readiness.
