@@ -1,0 +1,32 @@
+# XcodeGen spec: `xcodegen generate` builds ReviseHarness.xcodeproj from this file.
+# The Swift engine files are referenced from ../Revise (NOT copied), so there is one copy.
+name: ReviseHarness
+options:
+  bundleIdPrefix: com.camyx
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  Moonshine:
+    url: https://github.com/moonshine-ai/moonshine-swift.git
+    exactVersion: 0.1.5
+targets:
+  ReviseHarness:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: ../Revise
+        excludes:
+          - ReviseChannels.swift   # needs Flutter; the harness talks to ReviseEngine directly
+    dependencies:
+      - package: Moonshine
+        product: MoonshineVoice
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.camyx.revise.harness
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "ReVise listens to the conversation to caption it. Audio never leaves this phone."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
