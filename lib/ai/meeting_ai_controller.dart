@@ -98,6 +98,7 @@ class MeetingAiController extends ChangeNotifier {
   final StringBuffer _streamRaw = StringBuffer();
   int _requestCounter = 0;
   EngineState? _lastSessionState;
+  String _speakerSignature = '';
 
   // --- the two transcript versions ----------------------------------------------------
 
@@ -124,6 +125,10 @@ class MeetingAiController extends ChangeNotifier {
   Turn? turnOfSegment(String segmentId) =>
       cleanTurns.where((t) => t.segmentIds.contains(segmentId)).firstOrNull;
 
+  /// True when some turns are merged but not punctuated yet (after Stop finished, after edits, or
+  /// after a speaker was changed). Call [polish] to fix them; it only does the missing ones.
+  bool get needsPolish => cleanTurns.any((t) => t.status == TurnStatus.raw);
+
   bool get busy =>
       state == MeetingAiState.polishing ||
       state == MeetingAiState.summarizing ||
@@ -133,15 +138,18 @@ class MeetingAiController extends ChangeNotifier {
 
   /// Polish, then summarize, then suggest questions. Safe to call again (it only redoes what
   /// is missing or stale).
-  Future<void> runAll() async {
-    await polish();
-    if (state == MeetingAiState.error) return;
-    await summarize();
-  }
+  Future<void> runAll() => _enqueue(MeetingAiState.polishing, () async {
+    await _polishAll();
+    state = MeetingAiState.summarizing; // straight on, no "done" flash in between
+    notifyListeners();
+    await _summarizeAll();
+  });
 
   /// Merges fragments (instant) and punctuates each merged turn with the LLM. Turns whose words
   /// the model changed keep their original words. Already polished turns are skipped.
-  Future<void> polish() => _enqueue(MeetingAiState.polishing, () async {
+  Future<void> polish() => _enqueue(MeetingAiState.polishing, _polishAll);
+
+  Future<void> _polishAll() async {
     _ensureTurns();
     final watch = Stopwatch()..start();
     final pending = _turns.where((t) => t.status == TurnStatus.raw).toList();
@@ -154,7 +162,7 @@ class MeetingAiController extends ChangeNotifier {
       notifyListeners();
     }
     timingsMs['polish'] = watch.elapsedMilliseconds;
-  });
+  }
 
   Future<void> _polishTurn(Turn turn) async {
     final input = stripFillers(turn.hintedText); // fillers are removed by a rule, not by the model
@@ -192,7 +200,9 @@ class MeetingAiController extends ChangeNotifier {
   }
 
   /// 3 to 5 cited bullets, then 3 suggested questions. Uses the clean (or merged) text.
-  Future<void> summarize() => _enqueue(MeetingAiState.summarizing, () async {
+  Future<void> summarize() => _enqueue(MeetingAiState.summarizing, _summarizeAll);
+
+  Future<void> _summarizeAll() async {
     _ensureTurns();
     final input = _modelInput();
     if (input.ids.isEmpty) return;
@@ -220,7 +230,7 @@ class MeetingAiController extends ChangeNotifier {
       suggestedQuestions = const []; // suggestions are optional
     }
     timingsMs['suggest'] = watch.elapsedMilliseconds;
-  });
+  }
 
   /// Answers [question] from the transcript only. Returns the answer (also added to [answers]).
   /// While it runs, [streamingAnswer] fills in (iOS).
@@ -326,6 +336,7 @@ class MeetingAiController extends ChangeNotifier {
           tEndMs: s.tEndMs,
         ),
     ];
+    _speakerSignature = _currentSpeakerSignature();
     _turns = mergeFragments(lines);
     for (final turn in _turns) {
       final cached = _polishCache[turn.rawText];
@@ -434,11 +445,22 @@ class MeetingAiController extends ChangeNotifier {
     final now = session.state;
     final before = _lastSessionState;
     _lastSessionState = now;
+    _checkSpeakersChanged();
     if (now == before) return;
     if (now == EngineState.listening && before != EngineState.paused) reset();
     if (now == EngineState.stopped && before != EngineState.stopped && autoRun) {
       if (session.finals.isNotEmpty) unawaited(runAll());
     }
+  }
+
+  String _currentSpeakerSignature() =>
+      session.finals.map((s) => '${s.id}:${session.speakerOf(s)}').join(',');
+
+  /// Tap-to-fix or "use suggestions" after Stop changes who said a line, which changes the merge.
+  void _checkSpeakersChanged() {
+    if (!_turnsBuilt || _currentSpeakerSignature() == _speakerSignature) return;
+    _turnsBuilt = false;
+    if (summary != null) summaryStale = true;
   }
 
   /// Forgets everything (a new session started).
@@ -447,6 +469,7 @@ class MeetingAiController extends ChangeNotifier {
     _polishCache.clear();
     _turns = [];
     _turnsBuilt = false;
+    _speakerSignature = '';
     summary = null;
     summaryStale = false;
     suggestedQuestions = const [];

@@ -455,6 +455,22 @@ void main() {
       expect(engine.cleanCalls, hasLength(3)); // only the edited turn was sent again
     });
 
+    test('changing a line\'s speaker after Stop re-merges and asks for a new polish', () async {
+      final engine = engineWith(clean: (t) => '$t.');
+      final session = sessionWith([
+        (1, 'we need a better way to track orders', 0, 3000),
+        (1, 'and the notebook keeps losing pages', 3500, 5500),
+      ]);
+      final ai = MeetingAiController(engine, session, autoRun: false);
+      await ai.polish();
+      expect(ai.cleanTurns, hasLength(1));
+      expect(ai.needsPolish, isFalse);
+      session.setLineSpeaker('s-0002', 2);
+      await Future<void>.delayed(Duration.zero);
+      expect(ai.cleanTurns, hasLength(2)); // different speakers no longer merge
+      expect(ai.needsPolish, isTrue);
+    });
+
     test('auto-run starts after Stop on a real session with the mock engine', () async {
       final mock = MockCaptionEngine(
         wordInterval: const Duration(milliseconds: 1),
