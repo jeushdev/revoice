@@ -71,6 +71,23 @@ class SettingsTab extends StatelessWidget {
             ],
           ),
         ),
+        const SectionLabel('Recording'),
+        Glass(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 8, 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Ask for names before recording', style: label),
+                ),
+                Switch(
+                  value: app.askNames,
+                  onChanged: (v) => app.update(() => app.askNames = v),
+                ),
+              ],
+            ),
+          ),
+        ),
         const SectionLabel('Data'),
         Glass(
           child: Column(
@@ -105,8 +122,8 @@ class SettingsTab extends StatelessWidget {
                             child: Text('Meeting'),
                           ),
                           DropdownMenuItem(
-                            value: MockScenario.crmFailure,
-                            child: Text('Profile fails'),
+                            value: MockScenario.summaryFailure,
+                            child: Text('Summary fails'),
                           ),
                           DropdownMenuItem(
                             value: MockScenario.micInterrupted,

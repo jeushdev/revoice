@@ -1,18 +1,18 @@
 import 'package:flutter/widgets.dart';
 
-import '../crm/crm_controller.dart';
 import '../engine/caption_engine.dart';
 import '../engine/mock_caption_engine.dart';
 import '../engine/platform_caption_engine.dart';
 import '../session/clean_transcript.dart';
 import '../session/session_controller.dart';
+import '../summary/summary_controller.dart';
 
 /// One recorded session in the Library.
 class SavedSession {
-  SavedSession(this.session, this.crm)
-    : clean = CleanTranscript(session.engine, session, lock: crm.lock);
+  SavedSession(this.session, this.summary)
+    : clean = CleanTranscript(session.engine, session, lock: summary.lock);
   final SessionController session;
-  final CrmController crm;
+  final SummaryController summary;
   final CleanTranscript clean;
 
   DateTime get startedAt => session.startedAt ?? DateTime.now();
@@ -36,6 +36,9 @@ class AppState extends ChangeNotifier {
   /// Landscape captions: white on black when true.
   bool landscapeDark = true;
 
+  /// Show the optional "Who's in this conversation?" sheet before recording.
+  bool askNames = true;
+
   /// Replays a scripted conversation instead of the native engine. On by
   /// default until Moonshine is wired in on both platforms.
   bool sampleData = true;
@@ -57,7 +60,23 @@ class AppState extends ChangeNotifier {
 
   SavedSession newSession() {
     final session = SessionController(createEngine());
-    return SavedSession(session, CrmController(session.engine, session));
+    return SavedSession(session, SummaryController(session.engine, session));
+  }
+
+  /// Names from recent sessions (entered or heard), newest first.
+  List<String> get recentNames {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final s in sessions) {
+      final names = [
+        ...s.session.expectedNames,
+        ...s.session.speakerNames.values.map((n) => n.name),
+      ];
+      for (final n in names) {
+        if (seen.add(n.toLowerCase())) out.add(n);
+      }
+    }
+    return out.take(8).toList();
   }
 
   void save(SavedSession s) {

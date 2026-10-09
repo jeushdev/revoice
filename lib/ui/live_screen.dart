@@ -7,20 +7,27 @@ import '../app/app_state.dart';
 import '../engine/engine_events.dart';
 import '../session/session_controller.dart';
 import 'landscape_captions.dart';
+import 'names_sheet.dart';
 import 'rename_sheet.dart';
 import 'settings_tab.dart';
 import 'theme.dart';
 import 'transcript_screen.dart';
 import 'widgets.dart';
 
-/// Starts a new session and opens Live captions.
-Future<void> openLiveSession(BuildContext context) {
+/// Asks for names (optional, Settings can turn it off), then starts a new
+/// session and opens Live captions.
+Future<void> openLiveSession(BuildContext context) async {
   final app = AppScope.read(context);
-  return Navigator.push(
+  var names = const <String>[];
+  if (app.askNames) {
+    final picked = await showNamesSheet(context, recent: app.recentNames);
+    if (picked == null || !context.mounted) return; // dismissed
+    names = picked;
+  }
+  final saved = app.newSession()..session.expectedNames = names;
+  await Navigator.push(
     context,
-    MaterialPageRoute<void>(
-      builder: (_) => LiveScreen(saved: app.newSession()),
-    ),
+    MaterialPageRoute<void>(builder: (_) => LiveScreen(saved: saved)),
   );
 }
 
@@ -86,10 +93,11 @@ class _LiveScreenState extends State<LiveScreen> {
     final app = AppScope.read(context);
     await session.stop();
     if (!mounted) return;
-    // Saved on Stop; CRM then starts automatically (CrmController listens).
+    // Saved on Stop; the on-device summary starts right away.
     app
       ..save(widget.saved)
       ..update(() => app.tab = 0);
+    unawaited(widget.saved.summary.run());
     unawaited(
       SystemChrome.setPreferredOrientations(const [
         DeviceOrientation.portraitUp,
@@ -299,6 +307,24 @@ class _LiveScreenState extends State<LiveScreen> {
                   ),
                 ),
               ),
+              if (session.expectedNames.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                  child: Row(
+                    children: [
+                      Icon(Icons.group_rounded, size: 16, color: c.ink3),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'Expecting: ${session.expectedNames.join(', ')}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13, color: c.ink2),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               if (session.interrupted)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),

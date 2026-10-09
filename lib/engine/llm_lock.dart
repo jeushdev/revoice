@@ -1,7 +1,7 @@
 import 'dart:async';
 
-/// Serializes LLM requests (PRD: one `generateCrm` / `cleanLine` at a time),
-/// so CRM and the clean transcript can share one engine safely.
+/// Serializes LLM requests (one `generate` / `cleanLine` at a time), so the
+/// summary, questions and the clean transcript can share one engine safely.
 class LlmLock {
   Future<void> _tail = Future.value();
 

@@ -52,6 +52,17 @@ class _RenameSheetState extends State<_RenameSheet> {
   );
   late final _heard = heardNames(widget.session);
 
+  /// Names entered before recording that no speaker has yet.
+  late final _expected = widget.session.expectedNames
+      .where(
+        (n) =>
+            !_heard.contains(n) &&
+            !widget.session.speakerNames.values.any(
+              (s) => s.name.toLowerCase() == n.toLowerCase(),
+            ),
+      )
+      .toList();
+
   @override
   void dispose() {
     _text.dispose();
@@ -162,7 +173,7 @@ class _RenameSheetState extends State<_RenameSheet> {
                   ),
                 ),
               ),
-              if (_heard.isNotEmpty) ...[
+              if (_heard.isNotEmpty || _expected.isNotEmpty) ...[
                 const SizedBox(height: 14),
                 Wrap(
                   spacing: 8,
@@ -175,6 +186,20 @@ class _RenameSheetState extends State<_RenameSheet> {
                         shape: const StadiumBorder(),
                         label: Text(
                           'hearing $n',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: c.ink,
+                          ),
+                        ),
+                        onPressed: () => _text.text = n,
+                      ),
+                    for (final n in _expected)
+                      ActionChip(
+                        backgroundColor: c.surf2,
+                        side: BorderSide.none,
+                        shape: const StadiumBorder(),
+                        label: Text(
+                          n,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             color: c.ink,

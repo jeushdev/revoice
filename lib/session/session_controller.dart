@@ -26,7 +26,9 @@ class Segment {
   int tEndMs;
 }
 
-enum NameSource { auto, manual }
+/// auto: heard live (name rules). suggested: matched by the LLM after Stop
+/// from the names entered before recording. manual: typed by the user.
+enum NameSource { auto, suggested, manual }
 
 class SpeakerName {
   const SpeakerName(this.name, this.source);
@@ -58,6 +60,9 @@ class SessionController extends ChangeNotifier {
 
   final Map<String, Segment> _segments = {};
   final Map<int, SpeakerName> speakerNames = {};
+
+  /// Names entered before recording (optional). Context for the LLM only.
+  List<String> expectedNames = const [];
   ({String name, int fromSpeaker})? _pendingCall;
   StreamSubscription<EngineEvent>? _sub;
   Completer<void>? _stoppedSeen;
@@ -131,7 +136,7 @@ class SessionController extends ChangeNotifier {
       await seen.future.timeout(const Duration(seconds: 5), onTimeout: () {});
     }
     _clock.stop();
-    // Unconfirmed partials are excluded from the transcript and CRM.
+    // Unconfirmed partials are excluded from the transcript and summary.
     _segments.removeWhere((_, s) => !s.isFinal);
     notifyListeners();
   }
@@ -141,6 +146,22 @@ class SessionController extends ChangeNotifier {
     final trimmed = name.trim();
     if (speakerId == 0 || trimmed.isEmpty) return;
     speakerNames[speakerId] = SpeakerName(trimmed, NameSource.manual);
+    notifyListeners();
+  }
+
+  /// LLM match from [expectedNames]. Never overrides a manual name, and
+  /// replaces a live-heard name only when that name was not on the list.
+  void suggestName(int speakerId, String name) {
+    final current = speakerNames[speakerId];
+    if (speakerId == 0 || current?.source == NameSource.manual) return;
+    if (current != null &&
+        current.source == NameSource.auto &&
+        expectedNames.any(
+          (n) => n.toLowerCase() == current.name.toLowerCase(),
+        )) {
+      return;
+    }
+    speakerNames[speakerId] = SpeakerName(name, NameSource.suggested);
     notifyListeners();
   }
 
@@ -208,7 +229,8 @@ class SessionController extends ChangeNotifier {
   }
 
   void _assignAuto(int speakerId, String name) {
-    if (speakerNames[speakerId]?.source == NameSource.manual) return;
+    final source = speakerNames[speakerId]?.source;
+    if (source == NameSource.manual || source == NameSource.suggested) return;
     speakerNames[speakerId] = SpeakerName(name, NameSource.auto);
   }
 

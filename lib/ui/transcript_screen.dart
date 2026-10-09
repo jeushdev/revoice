@@ -1,14 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app/app_state.dart';
-import '../crm/crm_card.dart';
 import '../session/session_controller.dart';
+import '../summary/summary_controller.dart';
 import 'live_screen.dart';
-import 'profiles_screen.dart';
 import 'rename_sheet.dart';
 import 'settings_tab.dart' show Segmented;
+import 'summary_view.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -26,7 +28,7 @@ String sessionSubtitle(SavedSession s) {
   return '${_months[t.month - 1]} ${t.day} · $length';
 }
 
-/// Final transcript (mockups 3f, 3k, 3l).
+/// A saved session: the on-device Summary (default) and the Transcript.
 class TranscriptScreen extends StatefulWidget {
   const TranscriptScreen({super.key, required this.saved});
   final SavedSession saved;
@@ -36,13 +38,30 @@ class TranscriptScreen extends StatefulWidget {
 }
 
 class _TranscriptScreenState extends State<TranscriptScreen> {
+  /// 0 Summary, 1 Transcript.
+  int _tab = 0;
+
   /// Original is the default: it is authoritative and needs no model.
   bool _clean = false;
 
+  /// Lines a summary answer pointed to; tinted briefly in the transcript.
+  Set<String> _highlight = const {};
+  Timer? _highlightTimer;
+  final Map<String, GlobalKey> _lineKeys = {};
+
   SavedSession get saved => widget.saved;
+
+  @override
+  void dispose() {
+    _highlightTimer?.cancel();
+    super.dispose();
+  }
 
   String _plainText() {
     final s = saved.session;
+    if (_tab == 0 && saved.summary.status == SummaryStatus.done) {
+      return saved.summary.plainText();
+    }
     return s.finals
         .map(
           (l) =>
@@ -53,26 +72,44 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
   }
 
   void _maybeClean() {
-    final crm = saved.crm;
     final clean = saved.clean;
-    if (_clean && !crm.running && !clean.running && clean.hasPending) {
+    if (_clean &&
+        !saved.summary.running &&
+        !clean.running &&
+        clean.hasPending) {
       WidgetsBinding.instance.addPostFrameCallback((_) => clean.run());
     }
   }
 
-  void _openProfiles() => Navigator.push(
-    context,
-    MaterialPageRoute<void>(builder: (_) => ProfilesScreen(saved: saved)),
-  );
+  void _showSource(List<String> ids) {
+    setState(() {
+      _tab = 1;
+      _highlight = ids.toSet();
+    });
+    _highlightTimer?.cancel();
+    _highlightTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _highlight = const {});
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ctx = _lineKeys[ids.first]?.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.3,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final session = saved.session;
     return ListenableBuilder(
-      listenable: Listenable.merge([session, saved.crm, saved.clean]),
+      listenable: Listenable.merge([session, saved.summary, saved.clean]),
       builder: (context, _) {
         _maybeClean();
-        final c = context.rc;
         final lines = session.finals;
         return Scaffold(
           body: AmbientBackground(
@@ -81,56 +118,36 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
                 children: [
                   NavHeader(
                     backLabel: 'Library',
-                    title: 'Transcript',
+                    title: 'Session',
                     subtitle: sessionSubtitle(saved),
                   ),
+                  if (lines.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Segmented(
+                        options: const ['Summary', 'Transcript'],
+                        index: _tab,
+                        expand: true,
+                        onChanged: (i) => setState(() => _tab = i),
+                      ),
+                    ),
                   Expanded(
                     child: lines.isEmpty
                         ? _empty(context)
-                        : ListView(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                            children: [
-                              if (session.interrupted) ...[
-                                WarnBanner(
-                                  text:
-                                      'Mic interrupted at ${formatMs(session.interruptedAtMs ?? 0)}. '
-                                      'Earlier lines are saved.',
-                                ),
-                                const SizedBox(height: 12),
-                              ],
-                              _ProfilesCard(
-                                saved: saved,
-                                onOpen: _openProfiles,
-                              ),
-                              const SizedBox(height: 12),
-                              Segmented(
-                                options: const ['Clean', 'Original'],
-                                index: _clean ? 0 : 1,
-                                expand: true,
-                                onChanged: (i) =>
-                                    setState(() => _clean = i == 0),
-                              ),
-                              if (_clean &&
-                                  (saved.crm.running || saved.clean.running))
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Text(
-                                    saved.crm.running
-                                        ? 'Cleaning starts after profiles are built. Showing original lines.'
-                                        : 'Cleaning lines…',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: c.ink2,
-                                    ),
+                        : AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 260),
+                            switchInCurve: Curves.easeOutCubic,
+                            child: _tab == 0
+                                ? SummaryView(
+                                    key: const ValueKey('summary'),
+                                    saved: saved,
+                                    onSkip: () => setState(() => _tab = 1),
+                                    onShowSource: _showSource,
+                                  )
+                                : KeyedSubtree(
+                                    key: const ValueKey('transcript'),
+                                    child: _transcript(context, lines),
                                   ),
-                                ),
-                              const SizedBox(height: 8),
-                              for (final l in lines) _line(context, l),
-                              if (session.interrupted)
-                                _InterruptDivider(
-                                  atMs: session.interruptedAtMs ?? 0,
-                                ),
-                            ],
                           ),
                   ),
                   if (lines.isNotEmpty)
@@ -147,8 +164,14 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
                                   ClipboardData(text: _plainText()),
                                 );
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Transcript copied'),
+                                  SnackBar(
+                                    content: Text(
+                                      _tab == 0 &&
+                                              saved.summary.status ==
+                                                  SummaryStatus.done
+                                          ? 'Summary copied'
+                                          : 'Transcript copied',
+                                    ),
                                   ),
                                 );
                               },
@@ -176,11 +199,60 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
     );
   }
 
+  Widget _transcript(BuildContext context, List<Segment> lines) {
+    final c = context.rc;
+    final session = saved.session;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      children: [
+        if (session.interrupted) ...[
+          WarnBanner(
+            text:
+                'Mic interrupted at ${formatMs(session.interruptedAtMs ?? 0)}. '
+                'Earlier lines are saved.',
+          ),
+          const SizedBox(height: 12),
+        ],
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _clean && (saved.summary.running || saved.clean.running)
+                    ? saved.summary.running
+                          ? 'Cleaning starts after the summary.'
+                          : 'Cleaning lines…'
+                    : '${lines.length} lines',
+                style: TextStyle(fontSize: 13, color: c.ink2),
+              ),
+            ),
+            Segmented(
+              options: const ['Clean', 'Original'],
+              index: _clean ? 0 : 1,
+              onChanged: (i) => setState(() => _clean = i == 0),
+            ),
+          ],
+        ),
+        for (final l in lines) _line(context, l),
+        if (session.interrupted)
+          _InterruptDivider(atMs: session.interruptedAtMs ?? 0),
+      ],
+    );
+  }
+
   Widget _line(BuildContext context, Segment l) {
     final c = context.rc;
     final session = saved.session;
-    return Padding(
-      padding: const EdgeInsets.only(top: 16),
+    final lit = _highlight.contains(l.id);
+    return AnimatedContainer(
+      key: _lineKeys.putIfAbsent(l.id, GlobalKey.new),
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOut,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      decoration: BoxDecoration(
+        color: lit ? c.pc.withValues(alpha: .9) : c.pc.withValues(alpha: 0),
+        borderRadius: BorderRadius.circular(14),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -236,88 +308,6 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
           },
         ),
       ],
-    );
-  }
-}
-
-class _ProfilesCard extends StatelessWidget {
-  const _ProfilesCard({required this.saved, required this.onOpen});
-  final SavedSession saved;
-  final VoidCallback onOpen;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.rc;
-    final crm = saved.crm;
-    final cards = crm.cards.values.toList();
-    final done = cards.where((x) => x.status == CrmStatus.done).length;
-    final failed = cards.where((x) => x.status == CrmStatus.failed).length;
-    final String text;
-    if (crm.namedSpeakers.isEmpty) {
-      text = 'Name a speaker to build a profile';
-    } else if (crm.running) {
-      text = 'Building profiles… $done of ${cards.length}';
-    } else {
-      text =
-          '$done profile${done == 1 ? '' : 's'} ready'
-          '${failed > 0 ? ' · $failed failed' : ''}';
-    }
-    return Glass(
-      color: c.pc.withValues(alpha: 0.85),
-      child: InkWell(
-        onTap: onOpen,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      text,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: c.opc,
-                      ),
-                    ),
-                  ),
-                  if (failed > 0 && !crm.running)
-                    TextButton(
-                      onPressed: crm.retryFailed,
-                      child: const Text('Retry CRM'),
-                    ),
-                  Icon(Icons.chevron_right_rounded, color: c.opc),
-                ],
-              ),
-              if (crm.running) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(3),
-                  child: cards.isEmpty
-                      ? LinearProgressIndicator(
-                          minHeight: 5,
-                          color: c.primaryFill,
-                          backgroundColor: c.surf,
-                        )
-                      : TweenAnimationBuilder<double>(
-                          tween: Tween(end: done / cards.length),
-                          duration: const Duration(milliseconds: 500),
-                          curve: Curves.easeOutCubic,
-                          builder: (context, v, _) => LinearProgressIndicator(
-                            value: v,
-                            minHeight: 5,
-                            color: c.primaryFill,
-                            backgroundColor: c.surf,
-                          ),
-                        ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

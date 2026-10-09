@@ -13,8 +13,15 @@ abstract class CaptionEngine {
   Future<void> resume();
   Future<void> stop();
 
-  /// Returns raw model output. Dart parses and validates it.
-  Future<String> generateCrm({required String prompt, int maxTokens = 512});
+  /// Runs one on-device LLM prompt and returns the raw output. Dart builds
+  /// the prompts (summary, speaker matching, questions, answers) and parses
+  /// and validates the output. [json] asks for JSON-constrained decoding
+  /// where the backend supports it.
+  Future<String> generate({
+    required String prompt,
+    int maxTokens = 512,
+    bool json = true,
+  });
 
   /// Optional F2b stretch. Returns a candidate; Dart applies the safety checks.
   Future<String> cleanLine({

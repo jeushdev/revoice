@@ -39,15 +39,17 @@ class PlatformCaptionEngine implements CaptionEngine {
   Future<void> stop() => _call<bool>('stop');
 
   @override
-  Future<String> generateCrm({
+  Future<String> generate({
     required String prompt,
     int maxTokens = 512,
+    bool json = true,
   }) async {
-    final r = await _call<Map<Object?, Object?>>('generateCrm', {
+    final r = await _call<Map<Object?, Object?>>('generate', {
       'prompt': prompt,
       'maxTokens': maxTokens,
+      'json': json,
     });
-    return r?['json'] as String? ?? '';
+    return r?['text'] as String? ?? '';
   }
 
   @override

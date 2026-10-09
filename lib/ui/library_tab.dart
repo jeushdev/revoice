@@ -177,6 +177,26 @@ class _SessionRow extends StatelessWidget {
                       ],
                     ],
                   ),
+                  ListenableBuilder(
+                    listenable: saved.summary,
+                    builder: (context, _) {
+                      final text = saved.summary.summary;
+                      if (text == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 6, right: 8),
+                        child: Text(
+                          text,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.3,
+                            color: c.ink,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),

@@ -65,7 +65,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       result(true)
     case "stop":
       handleStop(result)
-    case "generateCrm", "cleanLine":
+    case "generate", "cleanLine":
       handleLlm(call, result)
     default:
       result(FlutterMethodNotImplemented)
@@ -125,7 +125,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     llmBusy = true
     DispatchQueue.global(qos: .userInitiated).async {
       // TODO(zairus): load llama.cpp / MLX model lazily, run `prompt` with
-      // `maxTokens` (JSON grammar for generateCrm), return the raw text.
+      // `maxTokens` (JSON grammar when args["json"] is true), return the raw text.
       _ = (prompt, maxTokens)
       let output: String? = nil
       DispatchQueue.main.async {
@@ -134,7 +134,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
           return result(
             FlutterError(code: "inference_failed", message: "LLM not wired in yet.", details: nil))
         }
-        result(call.method == "generateCrm" ? ["json": text] : ["text": text])
+        result(["text": text])
       }
     }
   }

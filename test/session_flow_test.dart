@@ -1,9 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:revise/crm/crm_card.dart';
-import 'package:revise/crm/crm_controller.dart';
 import 'package:revise/engine/engine_events.dart';
 import 'package:revise/engine/mock_caption_engine.dart';
 import 'package:revise/session/session_controller.dart';
+import 'package:revise/summary/summary_controller.dart';
 
 MockCaptionEngine fastMock(MockScenario s) => MockCaptionEngine(
   scenario: s,
@@ -19,8 +18,37 @@ Future<void> until(bool Function() done) async {
   expect(done(), isTrue);
 }
 
-Future<SessionController> recordFullMeeting(MockScenario s) async {
-  final session = SessionController(fastMock(s));
+/// Replies with fixed text per prompt TASK, to test validation.
+class ScriptedLlm extends MockCaptionEngine {
+  ScriptedLlm(this.replies)
+    : super(
+        wordInterval: const Duration(milliseconds: 1),
+        turnGap: const Duration(milliseconds: 1),
+        llmDelay: const Duration(milliseconds: 1),
+      );
+  final Map<String, String> replies;
+
+  @override
+  Future<String> generate({
+    required String prompt,
+    int maxTokens = 512,
+    bool json = true,
+  }) async {
+    final task = RegExp(
+      r'^TASK: (\w+)',
+      multiLine: true,
+    ).firstMatch(prompt)!.group(1)!;
+    return replies[task] ?? 'no idea';
+  }
+}
+
+Future<SessionController> recordFullMeeting(
+  MockScenario s, {
+  MockCaptionEngine? engine,
+  List<String> names = const [],
+}) async {
+  final session = SessionController(engine ?? fastMock(s))
+    ..expectedNames = names;
   await session.init();
   await session.start();
   await until(() => session.finals.length == MockCaptionEngine.script.length);
@@ -54,50 +82,119 @@ void main() {
     expect(session.displayName(1), 'Boss');
   });
 
-  test('CRM cards generate with evidence; empty fields stay empty', () async {
-    final session = await recordFullMeeting(MockScenario.meeting);
-    final crm = CrmController(session.engine, session);
-    await crm.generateMissing();
-    expect(crm.cards.length, 4);
-    expect(crm.cards.values.every((c) => c.status == CrmStatus.done), isTrue);
-    final sam = crm.cards[3]!;
-    expect(sam.commitments.map((c) => c.what), [
-      'send the deck',
-      'email the timeline to everyone',
-    ]);
-    expect(sam.commitments.first.due, 'Friday morning');
-    expect(sam.evidence['commitments[0].what'], ['s-0004']);
-    expect(crm.cards[1]!.commitments, isEmpty);
-    expect(crm.cards[1]!.contactMentioned, isNull);
+  test('summary: names matched, summary written, questions drafted', () async {
+    final session = await recordFullMeeting(
+      MockScenario.meeting,
+      names: ['Zairus', 'Sam'],
+    );
+    final summary = SummaryController(session.engine, session);
+    await summary.run();
+    expect(summary.status, SummaryStatus.done);
+    expect(summary.steps.values.every((s) => s == StepStatus.done), isTrue);
+    expect(summary.summary, contains('demo deck by Friday'));
+    expect(
+      summary.questions.map((q) => q.text),
+      contains('What are the deadlines?'),
+    );
+    expect(
+      summary.questions.every((q) => q.status == QuestionStatus.idle),
+      isTrue,
+    );
   });
 
-  test(
-    'CRM failure: auto retry once, then manual retry fixes only failed',
-    () async {
-      final session = await recordFullMeeting(MockScenario.crmFailure);
-      final crm = CrmController(session.engine, session);
-      await crm.generateMissing();
-      expect(crm.cards[3]!.status, CrmStatus.failed);
-      crm.cards[1]!
-        ..role = 'CEO'
-        ..markEdited('role');
-      await crm.retryFailed();
-      expect(crm.cards[3]!.status, CrmStatus.done);
-      expect(crm.cards[1]!.role, 'CEO');
-      expect(crm.cards[1]!.userEdited, contains('role'));
-    },
-  );
+  test('questions are answered only when asked, with valid sources', () async {
+    final session = await recordFullMeeting(MockScenario.meeting);
+    final summary = SummaryController(session.engine, session);
+    await summary.run();
+    expect(summary.steps[SummaryStep.matching], StepStatus.skipped);
+    final deadlines = summary.questions.firstWhere(
+      (q) => q.text.contains('deadlines'),
+    );
+    await summary.ask(deadlines);
+    expect(deadlines.status, QuestionStatus.answered);
+    expect(deadlines.answer, contains('Sam: demo deck by Friday morning'));
+    expect(deadlines.sources, ['s-0003', 's-0004', 's-0005', 's-0007']);
+    expect(summary.asked, [deadlines]);
+    expect(summary.plainText(), contains('What are the deadlines?'));
 
-  test('empty session: no lines, no cards', () async {
+    final odd = SuggestedQuestion('What did the cat eat?');
+    await summary.ask(odd);
+    expect(odd.found, isFalse);
+    expect(odd.answer, isNull);
+    summary.dismiss(deadlines);
+    expect(summary.asked, [odd]);
+  });
+
+  test('suggested names never beat manual or listed heard names', () {
+    final session = SessionController(fastMock(MockScenario.meeting))
+      ..expectedNames = ['Zairus', 'Jesh'];
+    session
+      ..speakerNames[1] = const SpeakerName('Zairus', NameSource.auto)
+      ..speakerNames[2] = const SpeakerName('Jeush', NameSource.auto)
+      ..speakerNames[3] = const SpeakerName('Boss', NameSource.manual)
+      ..suggestName(1, 'Jesh')
+      ..suggestName(2, 'Jesh')
+      ..suggestName(3, 'Zairus')
+      ..suggestName(4, 'Zairus');
+    expect(session.displayName(1), 'Zairus'); // heard and on the list
+    expect(session.displayName(2), 'Jesh'); // heard name was not listed
+    expect(session.speakerNames[2]!.source, NameSource.suggested);
+    expect(session.displayName(3), 'Boss'); // manual wins
+    expect(session.displayName(4), 'Zairus');
+  });
+
+  test('model output is validated: unlisted names, bad JSON, bad questions', () async {
+    final engine = ScriptedLlm({
+      'match_speakers':
+          '{"speakers": {"1": "Mallory", "2": "Sam", "3": "sam", "9": "Sam"}}',
+      'summary': 'Sure! {"summary": "Short recap."}',
+      'questions': '{"questions": ["Who took part?", "not a question", 3, "Who took part?"]}',
+    });
+    final session = await recordFullMeeting(
+      MockScenario.meeting,
+      engine: engine,
+      names: ['Sam'],
+    );
+    final summary = SummaryController(engine, session);
+    await summary.run();
+    expect(summary.status, SummaryStatus.done);
+    expect(summary.summary, 'Short recap.');
+    expect(session.displayName(1), 'Zairus'); // Mallory is not on the list
+    expect(session.displayName(2), 'Sam'); // first use of the name wins
+    expect(session.displayName(3), 'Sam'); // heard live, kept
+    expect(session.speakerNames[3]!.source, NameSource.auto);
+    expect(summary.questions.map((q) => q.text), ['Who took part?']);
+
+    final broken = ScriptedLlm({'summary': 'no json here'});
+    final s2 = await recordFullMeeting(MockScenario.meeting, engine: broken);
+    final failed = SummaryController(broken, s2);
+    await failed.run();
+    expect(failed.status, SummaryStatus.failed);
+    expect(failed.error, contains('Invalid model output'));
+  });
+
+  test('summary failure: Retry finishes without redoing done steps', () async {
+    final session = await recordFullMeeting(MockScenario.summaryFailure);
+    final summary = SummaryController(session.engine, session);
+    await summary.run();
+    expect(summary.status, SummaryStatus.failed);
+    expect(summary.steps[SummaryStep.summarizing], StepStatus.failed);
+    expect(summary.steps[SummaryStep.suggesting], StepStatus.pending);
+    await summary.run();
+    expect(summary.status, SummaryStatus.done);
+    expect(summary.questions, isNotEmpty);
+  });
+
+  test('empty session: nothing to summarize', () async {
     final session = SessionController(fastMock(MockScenario.emptySpeech));
     await session.init();
     await session.start();
     await Future<void>.delayed(const Duration(milliseconds: 50));
     await session.stop();
-    final crm = CrmController(session.engine, session);
-    await crm.generateMissing();
+    final summary = SummaryController(session.engine, session);
+    await summary.run();
     expect(session.finals, isEmpty);
-    expect(crm.cards, isEmpty);
+    expect(summary.status, SummaryStatus.idle);
   });
 
   test('pause flushes the current line; Stop while paused works', () async {
@@ -114,31 +211,6 @@ void main() {
     expect(session.finals.first.text, MockCaptionEngine.script.first.$2);
     await session.stop();
     expect(session.state, EngineState.stopped);
-  });
-
-  test('evidence from another speaker or unknown IDs is rejected', () {
-    final mine = Segment(
-      id: 's-0001',
-      text: "I'm Ana from Acme",
-      speakerId: 1,
-      isFinal: true,
-      tStartMs: 0,
-      tEndMs: 10,
-    );
-    final card = CrmCard(speakerId: 1)
-      ..applyModelOutput(
-        'Here: {"name":"Ana","role":"CTO","organization":"Acme",'
-        '"topics":["x"],"commitments":[],"source_segments":'
-        '{"role":["s-0099"],"organization":["s-0001"],"topics[0]":["s-0002"]}}',
-        {'s-0001': mine},
-      );
-    expect(card.role, isNull);
-    expect(card.organization, 'Acme');
-    expect(card.topics, isEmpty);
-    expect(
-      () => CrmCard(speakerId: 1).applyModelOutput('not json', {}),
-      throwsFormatException,
-    );
   });
 
   test('caption event parsing tolerates bad input', () {

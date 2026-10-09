@@ -34,10 +34,16 @@ void main() {
     await tester.pump();
     expect(find.text('Sample data'), findsWidgets);
     expect(find.text('Thanks for coming in.'), findsOneWidget);
-    expect(
-      find.text('Everything runs on this phone. Nothing is uploaded.'),
-      findsOneWidget,
+    expect(find.text('Ask for names before recording'), findsOneWidget);
+    final footer = find.text(
+      'Everything runs on this phone. Nothing is uploaded.',
     );
+    await tester.scrollUntilVisible(
+      footer,
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(footer, findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:revise/app/app_state.dart';
 import 'package:revise/engine/mock_caption_engine.dart';
 import 'package:revise/main.dart';
+import 'package:revise/summary/summary_controller.dart';
 import 'package:revise/ui/live_screen.dart';
 
 AppState fastApp([MockScenario scenario = MockScenario.meeting]) => AppState(
@@ -21,11 +22,24 @@ Future<void> pumpUntil(WidgetTester tester, bool Function() done) async {
   expect(done(), isTrue);
 }
 
-Future<SavedSession> startSession(WidgetTester tester, AppState app) async {
+/// Taps the mic, fills the optional names sheet (or skips it), starts.
+Future<SavedSession> startSession(
+  WidgetTester tester,
+  AppState app, {
+  String? names,
+}) async {
   await tester.pumpWidget(ReviseApp(app: app));
   await tester.tap(find.bySemanticsLabel('Start session').first);
+  await tester.pumpAndSettle();
+  expect(find.text("Who's in this conversation?"), findsOneWidget);
+  if (names == null) {
+    await tester.tap(find.text('Skip'));
+  } else {
+    await tester.enterText(find.byType(TextField), names);
+    await tester.tap(find.text('Start recording'));
+  }
   await tester.pump();
-  await tester.pump(const Duration(milliseconds: 300));
+  await tester.pump(const Duration(milliseconds: 600));
   return tester.widget<LiveScreen>(find.byType(LiveScreen)).saved;
 }
 
@@ -44,40 +58,44 @@ void main() {
         .clearAccessibilityFeaturesTestValue(),
   );
 
-  testWidgets('record, stop, transcript and profiles with mock data', (
-    tester,
-  ) async {
+  testWidgets('names, record, stop, summary, ask a question', (tester) async {
     tester.view
       ..physicalSize = const Size(1170, 2532)
       ..devicePixelRatio = 3;
     addTearDown(tester.view.reset);
     final app = fastApp();
-    final saved = await startSession(tester, app);
+    final saved = await startSession(tester, app, names: 'Sam, Zairus');
+    expect(saved.session.expectedNames, ['Sam', 'Zairus']);
     await pumpUntil(
       tester,
       () => saved.session.finals.length == MockCaptionEngine.script.length,
     );
     expect(find.text('Listening'), findsOneWidget);
+    expect(find.text('Expecting: Sam, Zairus'), findsOneWidget);
     expect(find.text('Demo · Sample data'), findsOneWidget);
 
     await tester.tap(find.text('Stop'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Summarizing on this phone'), findsOneWidget);
+    await pumpUntil(tester, () => saved.summary.status == SummaryStatus.done);
+    await tester.pumpAndSettle();
+    expect(app.sessions, [saved]);
+    expect(find.textContaining('A LarpCode team check-in'), findsOneWidget);
+    expect(find.text('Suggested questions'), findsOneWidget);
+
+    await tester.tap(find.text('What are the deadlines?'));
     await pumpUntil(
       tester,
-      () => !saved.crm.running && saved.crm.cards.isNotEmpty,
+      () => saved.summary.asked.first.status == QuestionStatus.answered,
     );
     await tester.pumpAndSettle();
-    expect(find.text('Transcript'), findsOneWidget);
-    expect(find.text('4 profiles ready'), findsOneWidget);
-    expect(app.sessions, [saved]);
+    expect(find.text('Sam: demo deck by Friday morning'), findsOneWidget);
 
-    await tester.tap(find.text('4 profiles ready'));
+    await tester.tap(find.text('Transcript'));
     await tester.pumpAndSettle();
-    expect(find.text('Profiles'), findsOneWidget);
-    await tester.tap(find.text('Sam'));
-    await tester.pumpAndSettle();
-    expect(find.text('send the deck'), findsOneWidget);
-    expect(find.text('Due Friday morning'), findsOneWidget);
-    expect(find.text('Copy as text'), findsOneWidget);
+    expect(find.text('Original'), findsOneWidget);
+    expect(find.textContaining("Hi everyone, I'm Zairus"), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
@@ -93,11 +111,6 @@ void main() {
     expect(find.textContaining('Sam: I can email'), findsOneWidget);
     expect(find.textContaining("Hi everyone, I'm Zairus"), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
-    // Leaving mid-session stops it; let the automatic CRM run finish.
-    await pumpUntil(
-      tester,
-      () => !saved.crm.running && saved.crm.cards.isNotEmpty,
-    );
   });
 
   testWidgets('mic denied and empty session screens', (tester) async {
