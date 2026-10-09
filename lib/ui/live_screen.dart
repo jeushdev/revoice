@@ -94,6 +94,34 @@ class _LiveScreenState extends State<LiveScreen> {
               if (error != null)
                 _ErrorBanner(session: session, onRetry: _begin),
               Expanded(child: _captions(context)),
+              // Safety net: if the app can't tell the voices apart, press this when the speaker changes.
+              if (state == EngineState.listening || state == EngineState.paused)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      FilledButton.tonalIcon(
+                        icon: const Icon(Icons.swap_horiz),
+                        label: const Text('Switch speaker'),
+                        onPressed: session.switchSpeaker,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          session.liveSpeakerOverride == null
+                              ? 'Auto speaker'
+                              : 'Manual: ${session.displayName(session.liveSpeakerOverride!)}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (session.liveSpeakerOverride != null)
+                        TextButton(
+                          onPressed: session.useAutoSpeaker,
+                          child: const Text('Auto'),
+                        ),
+                    ],
+                  ),
+                ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
@@ -187,7 +215,7 @@ class _LiveScreenState extends State<LiveScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SpeakerChip(session: session, speakerId: seg.speakerId),
+              SpeakerChip(session: session, speakerId: session.speakerOf(seg)),
               Text(
                 seg.text,
                 style: TextStyle(

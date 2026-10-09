@@ -88,3 +88,42 @@ Future<void> showRenameSheet(
   );
   if (name != null) session.rename(speakerId, name);
 }
+
+/// Tap-a-line on the transcript: choose which speaker said this line.
+/// Offers every known speaker plus the next free number (up to 4 people).
+Future<void> showLineSpeakerPicker(
+  BuildContext context,
+  SessionController session,
+  Segment line,
+) {
+  final ids = {...session.knownSpeakers, 1, 2};
+  final next = ids.reduce((a, b) => a > b ? a : b) + 1;
+  if (next <= 4) ids.add(next);
+  final options = ids.toList()..sort();
+  return showModalBottomSheet<void>(
+    context: context,
+    builder: (sheet) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const ListTile(title: Text('Who said this line?')),
+          for (final id in options)
+            ListTile(
+              leading: CircleAvatar(
+                radius: 8,
+                backgroundColor: speakerColor(id),
+              ),
+              title: Text(session.displayName(id)),
+              trailing: session.speakerOf(line) == id
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                session.setLineSpeaker(line.id, id);
+                Navigator.pop(sheet);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
+}

@@ -21,7 +21,7 @@ class TranscriptScreen extends StatelessWidget {
   String _plainText() => session.finals
       .map(
         (s) =>
-            '[${formatMs(s.tStartMs)}] ${session.displayName(s.speakerId)}: ${s.text}',
+            '[${formatMs(s.tStartMs)}] ${session.displayName(session.speakerOf(s))}: ${s.text}',
       )
       .join('\n');
 
@@ -90,11 +90,19 @@ class TranscriptScreen extends StatelessWidget {
                                   children: [
                                     SpeakerChip(
                                       session: session,
-                                      speakerId: s.speakerId,
+                                      speakerId: session.speakerOf(s),
                                     ),
-                                    Text(
-                                      s.text,
-                                      style: const TextStyle(fontSize: 18),
+                                    // Tap the line (not the label) to change who said it.
+                                    InkWell(
+                                      onTap: () => showLineSpeakerPicker(
+                                        context,
+                                        session,
+                                        s,
+                                      ),
+                                      child: Text(
+                                        s.text,
+                                        style: const TextStyle(fontSize: 18),
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -128,7 +136,8 @@ class _CrmStrip extends StatelessWidget {
 
     final String text;
     if (named.isEmpty) {
-      text = 'Name a speaker to build a profile. Tap a label to rename.';
+      text =
+          'Name a speaker to build a profile. Tap a label to rename, or tap a line to change its speaker.';
     } else if (crm.running) {
       text = 'Building profiles… $done of ${cards.length}';
     } else {

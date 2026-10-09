@@ -251,7 +251,7 @@ class _CardView extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text(
-                    '[${formatMs(s.tStartMs)}] ${session.displayName(s.speakerId)}: ${s.text}',
+                    '[${formatMs(s.tStartMs)}] ${session.displayName(session.speakerOf(s))}: ${s.text}',
                   ),
                 ),
           ],

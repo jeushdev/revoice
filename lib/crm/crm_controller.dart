@@ -76,7 +76,7 @@ class CrmController extends ChangeNotifier {
     notifyListeners();
     final lines = {
       for (final s in session.finals)
-        if (s.speakerId == card.speakerId) s.id: s,
+        if (session.speakerOf(s) == card.speakerId) s.id: s,
     };
     final prompt = buildPrompt(card, lines.values.toList());
     for (var attempt = 1; attempt <= 2; attempt++) {

@@ -24,6 +24,12 @@ class Segment {
   bool isFinal;
   int tStartMs;
   int tEndMs;
+
+  /// Speaker chosen by the user (Switch speaker button / tapping the line). Wins over everything.
+  int? manualSpeakerId;
+
+  /// Speaker suggested by the post-Stop on-device model. The original [speakerId] is kept.
+  int? suggestedSpeakerId;
 }
 
 enum NameSource { auto, manual }
@@ -64,11 +70,58 @@ class SessionController extends ChangeNotifier {
       _segments.values.where((s) => !s.isFinal).toList()
         ..sort((a, b) => a.tStartMs.compareTo(b.tStartMs));
 
+  /// Which speaker a line is shown and counted under: the user's choice, else the on-device
+  /// model's suggestion (if suggestions are on), else what Moonshine heard. [Segment.speakerId]
+  /// itself is never overwritten.
+  int speakerOf(Segment s) =>
+      s.manualSpeakerId ?? (useSuggestions ? s.suggestedSpeakerId : null) ?? s.speakerId;
+
+  /// Whether post-Stop speaker suggestions are shown (the original labels are always kept).
+  bool useSuggestions = true;
+
   /// Speakers with at least one final line, excluding unknown (0).
   List<int> get knownSpeakers => {
     for (final s in finals)
-      if (s.speakerId != 0) s.speakerId,
+      if (speakerOf(s) != 0) speakerOf(s),
   }.toList()..sort();
+
+  // --- Manual speaker controls (safety net when diarization can't tell voices apart) ---
+
+  /// While set, every NEW line is labelled with this speaker instead of Moonshine's guess.
+  int? liveSpeakerOverride;
+
+  /// The speaker the next line will be labelled with (override, else the last line's speaker).
+  int get currentSpeaker {
+    if (liveSpeakerOverride != null) return liveSpeakerOverride!;
+    final all = [...finals, ...partials];
+    for (var i = all.length - 1; i >= 0; i--) {
+      if (speakerOf(all[i]) != 0) return speakerOf(all[i]);
+    }
+    return 1;
+  }
+
+  /// "Switch speaker": the next lines belong to the next speaker (1 -> 2 -> ... -> 1).
+  /// There are always at least two speakers to switch between.
+  void switchSpeaker() {
+    final ids = {...knownSpeakers, currentSpeaker, 2};
+    final count = ids.reduce((a, b) => a > b ? a : b).clamp(2, 4);
+    liveSpeakerOverride = currentSpeaker % count + 1;
+    notifyListeners();
+  }
+
+  /// Back to Moonshine's own speaker labels for new lines.
+  void useAutoSpeaker() {
+    liveSpeakerOverride = null;
+    notifyListeners();
+  }
+
+  /// Tap-a-line on the transcript: put this line under [speakerId] (0 = unknown).
+  void setLineSpeaker(String segmentId, int speakerId) {
+    final seg = _segments[segmentId];
+    if (seg == null) return;
+    seg.manualSpeakerId = speakerId;
+    notifyListeners();
+  }
 
   String displayName(int speakerId) {
     if (speakerId == 0) return 'Unknown';
@@ -88,6 +141,7 @@ class SessionController extends ChangeNotifier {
   Future<void> start() async {
     _segments.clear();
     speakerNames.clear();
+    liveSpeakerOverride = null;
     _pendingCall = null;
     interrupted = false;
     errorMessage = null;
@@ -150,7 +204,7 @@ class SessionController extends ChangeNotifier {
           isFinal: false,
           tStartMs: e.tStartMs,
           tEndMs: e.tEndMs,
-        ));
+        )..manualSpeakerId = liveSpeakerOverride);   // "Switch speaker" is on: this line is forced
     seg
       ..text = e
           .text // partials replace the whole text
@@ -162,7 +216,7 @@ class SessionController extends ChangeNotifier {
   }
 
   void _applyNameRules(Segment seg) {
-    final speaker = seg.speakerId;
+    final speaker = speakerOf(seg);
     final call = _pendingCall;
     if (call != null && speaker != 0 && speaker != call.fromSpeaker) {
       _assignAuto(speaker, call.name);

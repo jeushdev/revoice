@@ -122,6 +122,18 @@ class MockCaptionEngine implements CaptionEngine {
     });
   }
 
+  /// Demo mode has no model for the generic LLM call; callers treat model_missing as "skip".
+  @override
+  Future<String> generate({
+    required String prompt,
+    int maxTokens = 512,
+    String? system,
+    Object? jsonGrammar,
+  }) async => throw const EngineException(
+    EngineErrorCode.modelMissing,
+    'Demo mode has no on-device model for this step.',
+  );
+
   @override
   Future<String> cleanLine({
     required String text,

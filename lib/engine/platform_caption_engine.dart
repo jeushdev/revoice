@@ -65,6 +65,22 @@ class PlatformCaptionEngine implements CaptionEngine {
   }
 
   @override
+  Future<String> generate({
+    required String prompt,
+    int maxTokens = 512,
+    String? system,
+    Object? jsonGrammar,
+  }) async {
+    final r = await _call<Map<Object?, Object?>>('generate', {
+      'prompt': prompt,
+      'maxTokens': maxTokens,
+      if (system != null) 'system': system,
+      if (jsonGrammar != null) 'jsonGrammar': jsonGrammar,
+    });
+    return r?['text'] as String? ?? '';
+  }
+
+  @override
   Future<void> dispose() async {}
 
   Future<T?> _call<T>(String method, [Object? args]) async {
