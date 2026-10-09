@@ -48,12 +48,19 @@ Models/diarization/           segmentation.ort, embedding.ort
 Models/llm/*.gguf             (later)
 ```
 
+## Moonshine SDK gotchas found while testing (0.1.5)
+
+- **`MicTranscriber` crashes on release with speaker ID on.** Its `close()` closes the stream, then `Stream.deinit` closes it
+  again; the second free segfaults (`EXC_BAD_ACCESS` in `Transcriber::free_stream`). So we use `Revise/MoonshineMic.swift`
+  (public `Transcriber` + `Stream`, each stream freed exactly once). Don't switch back to `MicTranscriber`.
+- **`speakerIndex` is not "Speaker N".** It never restarts and skips numbers when re-clustering drops a provisional speaker.
+  `CaptionTracker` numbers speakers 1, 2, 3... per session by first appearance of the stable `speakerId`.
+- **Speaker data arrives after a line completes.** `CaptionTracker` holds a finished line up to 2.5 s for its speaker, then
+  sends it as Unknown (0). The first ~8 s of a session are often Unknown while the diarizer warms up.
+- **`Stream.stop()` then `start()` resets the stream clock and the speaker identities.** So Pause does not stop the stream:
+  it stops the mic and feeds 1.2 s of silence so the phrase finishes; Resume keeps the same stream.
+
 ## Not verified yet (needs the phone)
 
-- `ReviseEngine` + `CaptionTracker` + `ReviseModelStore` compile against moonshine-swift 0.1.5. `ReviseChannels` has **not**
-  been compiled (no Flutter project yet).
-- Pause/resume assumes Moonshine's stream keeps counting time after `stop()` then `start()`. If timestamps jump
-  backwards after resume, that assumption is wrong.
-- Speaker IDs use Moonshine `speakerIndex + 1` of the longest span in a line; later re-clustering of already-final
-  lines is ignored (contract: final never changes).
-- Caption delay with speaker ID on (PRD section 11: about 1 second) is unmeasured.
+- Everything above was tested in a macOS command-line program with recorded audio, not on the iPhone.
+- Caption delay with speaker ID on (PRD section 11: about 1 second) is unmeasured on the phone.

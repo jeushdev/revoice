@@ -30,7 +30,7 @@ actor ReviseEngine {
     }
 
     private var state: State = .idle
-    private var mic: MicTranscriber?
+    private var mic: MoonshineMic?
     private var tracker: CaptionTracker?
     private var pausedAt: Date?
     private var observers: [NSObjectProtocol] = []
@@ -80,12 +80,12 @@ actor ReviseEngine {
                 Task { await self?.asyncFailure(message) }
             })
         tracker.beginRun()
-        mic.removeAllListeners()
-        mic.addListener { event in tracker.handle(event) }
 
         do {
-            try mic.start()
+            try mic.begin { event in tracker.handle(event) }   // fresh stream: speakers restart at 1
+            try mic.startCapture()
         } catch {
+            mic.finish()
             tracker.close()
             throw ReviseError(code: .captureFailed, message: error.localizedDescription)
         }
@@ -98,7 +98,7 @@ actor ReviseEngine {
     func pause() throws {
         guard state == .listening, let mic else { throw Self.invalidState("pause") }
         let started = Date()
-        try? mic.stop()
+        mic.pauseCapture()                  // stops the mic and flushes pending speech as final
         tracker?.flushPendingAsFinal()
         pausedAt = Date()
         setState(.paused)
@@ -110,9 +110,9 @@ actor ReviseEngine {
         try await ensureMicPermission()
         // Paused time still counts toward session time (PRD section 7).
         let pausedMs = Int(Date().timeIntervalSince(pausedAt ?? Date()) * 1000)
-        tracker.beginRun(addingPausedMs: pausedMs)
+        tracker.addPausedTime(ms: pausedMs)
         do {
-            try mic.start()
+            try mic.resumeCapture()
         } catch {
             throw ReviseError(code: .captureFailed, message: error.localizedDescription)
         }
@@ -159,7 +159,7 @@ actor ReviseEngine {
     /// Stops the mic, flushes, closes the tracker, and releases STT. Returns nothing useful;
     /// callers set the next state themselves.
     private func stopRecording(releasingModels: Bool = true) -> Bool {
-        try? mic?.stop()                    // Moonshine emits final events for pending speech
+        mic?.finish()                       // stops the mic, flushes (final events), frees the stream once
         tracker?.flushPendingAsFinal()      // belt and braces: nothing stays partial
         tracker?.close()
         tracker = nil
@@ -181,10 +181,9 @@ actor ReviseEngine {
         ]
         do {
             // Loading from local paths: no network involved.
-            mic = try MicTranscriber(
+            mic = try MoonshineMic(
                 modelPath: sttDir.path,
                 modelArch: ReviseModelStore.sttArch,
-                updateInterval: 0.5,
                 options: options)
         } catch {
             throw ReviseError(
@@ -192,9 +191,12 @@ actor ReviseEngine {
         }
     }
 
+    /// Frees the speech model exactly once: `close()` ends any open stream, then dropping the
+    /// last reference lets Moonshine free the transcriber. Calling it again is a no-op.
     private func releaseSTT() {
-        mic?.close()
+        guard let current = mic else { return }
         mic = nil
+        current.close()
     }
 
     /// Asks for mic permission if the user hasn't decided yet. Throws `permission_denied`

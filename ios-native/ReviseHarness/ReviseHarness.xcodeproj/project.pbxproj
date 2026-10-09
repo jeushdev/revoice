@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		0C378D258D99EF643B63CBC6 /* MoonshineVoice in Frameworks */ = {isa = PBXBuildFile; productRef = 55A255DABF6F72C4FAA73EDC /* MoonshineVoice */; };
 		0E8B51FDADD1D97B6732764C /* ReviseModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00F4F3700859C07F3065666 /* ReviseModelStore.swift */; };
+		2B0ACD5F4604F7D1FAEF1793 /* MoonshineMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */; };
 		31C2ED8FD297EB871114ACA0 /* ReviseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1FB12E0BAD58E669C1DC74 /* ReviseEngine.swift */; };
 		77CCBB4C73BA643E2F3F743A /* HarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC454E0B4669E704502B5076 /* HarnessView.swift */; };
 		8AC1B3039A9E1FCD432D2DA4 /* Models in Resources */ = {isa = PBXBuildFile; fileRef = 88BE725ECDF88ED741D18555 /* Models */; };
@@ -21,6 +22,7 @@
 		7A1FB12E0BAD58E669C1DC74 /* ReviseEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviseEngine.swift; sourceTree = "<group>"; };
 		88BE725ECDF88ED741D18555 /* Models */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = Models; path = ../Models; sourceTree = SOURCE_ROOT; };
 		98B418EBAE9F3F90B38AC666 /* ReviseHarness.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReviseHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MoonshineMic.swift; path = ../Revise/MoonshineMic.swift; sourceTree = SOURCE_ROOT; };
 		CC454E0B4669E704502B5076 /* HarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessView.swift; sourceTree = "<group>"; };
 		EFDCF2160AB7A182C0711ED0 /* ReviseHarnessApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviseHarnessApp.swift; sourceTree = "<group>"; };
 		F00F4F3700859C07F3065666 /* ReviseModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviseModelStore.swift; sourceTree = "<group>"; };
@@ -73,6 +75,7 @@
 				0A029DF627948F693911BFC8 /* Sources */,
 				C6597E1FFDDE897FF5FF588A /* Products */,
 				88BE725ECDF88ED741D18555 /* Models */,
+				C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -156,6 +159,7 @@
 				31C2ED8FD297EB871114ACA0 /* ReviseEngine.swift in Sources */,
 				C235F26EF8C285D0A87220B5 /* ReviseHarnessApp.swift in Sources */,
 				0E8B51FDADD1D97B6732764C /* ReviseModelStore.swift in Sources */,
+				2B0ACD5F4604F7D1FAEF1793 /* MoonshineMic.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
