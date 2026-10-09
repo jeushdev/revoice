@@ -97,19 +97,27 @@ const phoneRun = <(int, String, int, int)>[
 
 void main() {
   group('mergeFragments', () {
-    test('phone-run case merges into one turn and keeps every segment id', () {
+    test('phone-run case: unfinished fragments merge, a finished sentence ends the turn', () {
       final turns = mergeFragments([
         line('s-1', 1, 'Honestly...', 0, 900),
-        line('s-2', 1, 'Is the paperwork', 1200, 2400),
+        line('s-2', 1, 'Is the paperwork', 1200 - 300, 2400),
         line('s-3', 1, 'We track all our orders in a notebook.', 2800, 5200),
         line('s-4', 1, 'And things get lost.', 5600, 6800),
       ]);
-      expect(turns, hasLength(1));
-      expect(turns.single.segmentIds, ['s-1', 's-2', 's-3', 's-4']);
-      expect(
-        turns.single.rawText,
-        'Honestly... Is the paperwork We track all our orders in a notebook. And things get lost.',
-      );
+      expect(turns, hasLength(2));
+      expect(turns.first.segmentIds, ['s-1', 's-2', 's-3']);
+      expect(turns.first.rawText, 'Honestly... Is the paperwork We track all our orders in a notebook.');
+      expect(turns.last.segmentIds, ['s-4']);
+    });
+
+    test('two different people the diarizer called one speaker are not glued (device case)', () {
+      final turns = mergeFragments([
+        line('s-7', 1, 'It costs 500 pesos a month.', 0, 2000),
+        line('s-8', 1, "That works for us. Let's go with the monthly plan.", 2300, 5000),
+        line('s-9', 1, "I'll send the setup guide by Friday.", 5300, 7000),
+        line('s-10', 1, "I'll train my staff on Monday.", 7300, 9000),
+      ]);
+      expect(turns, hasLength(4));
     });
 
     test('different speaker, long gap, or finished sentence + capital start do not merge', () {
@@ -118,15 +126,25 @@ void main() {
       expect(mergeFragments([line('a', 1, 'That is done.', 0, 500), line('b', 1, 'Next topic is budget', 800, 1500)]), hasLength(2));
     });
 
-    test('merges on lowercase start or and/so/but/because/or after a finished sentence', () {
-      expect(mergeFragments([line('a', 1, 'We shipped it.', 0, 500), line('b', 1, 'because it was ready', 700, 1500)]), hasLength(1));
-      for (final w in ['And', 'So', 'But', 'Because', 'Or']) {
-        expect(mergeFragments([line('a', 1, 'We shipped it.', 0, 500), line('b', 1, '$w later', 700, 1500)]), hasLength(1), reason: w);
+    test('a line that ends with . ? ! never merges, even if the next starts with and/lowercase', () {
+      for (final next in ['and later', 'because it was ready', 'But why']) {
+        expect(mergeFragments([line('a', 1, 'We shipped it.', 0, 500), line('b', 1, next, 700, 1500)]), hasLength(2), reason: next);
       }
+      expect(mergeFragments([line('a', 1, 'Is it done?', 0, 500), line('b', 1, 'yes', 700, 1500)]), hasLength(2));
     });
 
-    test('gap exactly 1.5 s does not merge; empty lines are skipped', () {
-      expect(mergeFragments([line('a', 1, 'and so', 0, 1000), line('b', 1, 'on', 2500, 3000)]), hasLength(2));
+    test('an unfinished line merges with the next when the gap is under 1 s', () {
+      expect(mergeFragments([line('a', 1, 'We shipped it and', 0, 500), line('b', 1, 'it works', 1499, 2000)]), hasLength(1));
+      expect(mergeFragments([line('a', 1, 'We shipped it and', 0, 500), line('b', 1, 'it works', 1500, 2000)]), hasLength(2)); // gap 1.0 s
+    });
+
+    test('a merged turn stays under 40 words', () {
+      final words = List.filled(30, 'word').join(' ');
+      expect(mergeFragments([line('a', 1, words, 0, 500), line('b', 1, List.filled(9, 'more').join(' '), 600, 900)]), hasLength(1)); // 39
+      expect(mergeFragments([line('a', 1, words, 0, 500), line('b', 1, List.filled(10, 'more').join(' '), 600, 900)]), hasLength(2)); // 40
+    });
+
+    test('empty lines are skipped', () {
       expect(mergeFragments([line('a', 1, '  ', 0, 100), line('b', 1, 'Hi', 200, 300)]).single.segmentIds, ['b']);
     });
   });
@@ -167,11 +185,10 @@ void main() {
     test('a pause between an unfinished fragment and a new sentence becomes "..."', () {
       final turn = mergeFragments([
         line('a', 1, 'Honestly...', 0, 900),
-        line('b', 1, 'Is the paperwork', 1200, 2400),
+        line('b', 1, 'Is the paperwork', 1000, 2400),
         line('c', 1, 'We track all our orders in a notebook.', 2800, 5200),
-        line('d', 1, 'And things get lost.', 5600, 6800),
       ]).single;
-      expect(turn.hintedText, 'Honestly... Is the paperwork... We track all our orders in a notebook. And things get lost.');
+      expect(turn.hintedText, 'Honestly... Is the paperwork... We track all our orders in a notebook.');
       expect(passesWordGuard(turn.rawText, turn.hintedText), isTrue); // only punctuation differs
       final cont = mergeFragments([line('a', 1, 'About forty', 0, 900), line('b', 1, 'and some by text', 1200, 2000)]).single;
       expect(cont.hintedText, 'About forty and some by text'); // continuations are not cut
@@ -184,6 +201,7 @@ void main() {
       };
       expect(findEvidence('Jun sends a demo next Friday', turns), ['s-2']);
       expect(findEvidence('The office is in Manila', turns), isEmpty);
+      expect(findEvidence('They keep tracking orders', turns), ['s-1']); // tracking/track, orders/order
     });
 
     test('an invented answer is unsupported even if the model cites a real id', () {
@@ -322,7 +340,7 @@ void main() {
   group('MeetingAiController', () {
     String? cleanFor(String t) => switch (t) {
       _ when t.startsWith('Honestly') =>
-        'Honestly, is the paperwork? We track all our orders in a notebook. And things get lost.',
+        'Honestly, is the paperwork? We track all our orders in a notebook.',
       _ => null,
     };
 
@@ -332,24 +350,41 @@ void main() {
     test('polish merges, punctuates, and keeps both versions', () async {
       final engine = engineWith();
       final session = sessionWith(phoneRun);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       expect(ai.originalLines, hasLength(5));
-      expect(ai.cleanTurns, hasLength(2));
+      expect(ai.cleanTurns, hasLength(3));
       await ai.polish();
       expect(ai.state, MeetingAiState.done);
       final first = ai.cleanTurns.first;
       expect(first.status, TurnStatus.polished);
       expect(first.text, startsWith('Honestly, is the paperwork?'));
-      expect(first.segmentIds, ['s-0001', 's-0002', 's-0003', 's-0004']);
+      expect(first.segmentIds, ['s-0001', 's-0002', 's-0003']);
       expect(ai.originalLines.first.text, 'Honestly...'); // original untouched
       expect(ai.cleanTurns.last.text, 'That sounds painful.'); // 3 words: rules only, no model call
-      expect(engine.cleanCalls, hasLength(1));
+      expect(engine.cleanCalls, hasLength(2)); // 'And things get lost.' too; 3-word turns use rules only
+    });
+
+    test('default (llmPolish off): Clean is rules only, instant, no model call', () async {
+      final engine = engineWith(clean: (t) => throw StateError('the model must not be called'));
+      final session = sessionWith([
+        (1, 'um so the price is 500 pesos', 0, 2000),
+        (1, 'a month', 2300, 3000),
+        (2, 'sounds good to me.', 4500, 5500),
+      ]);
+      final ai = MeetingAiController(engine, session, autoRun: false);
+      await ai.polish();
+      expect(ai.state, MeetingAiState.done);
+      expect(engine.cleanCalls, isEmpty);
+      expect(ai.cleanTurns.first.text, 'So the price is 500 pesos a month');
+      expect(ai.cleanTurns.first.status, TurnStatus.polished);
+      expect(ai.cleanTurns.last.text, 'Sounds good to me.');
+      expect(ai.cleanTurns.first.rawText, 'um so the price is 500 pesos a month'); // originals kept
     });
 
     test('a polish that changes a word is rejected and the original words stay', () async {
       final engine = engineWith(clean: (t) => 'Honestly, is the paperwork? We track all our orders in a binder. And things get lost.');
       final session = sessionWith(phoneRun);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       await ai.polish();
       expect(ai.cleanTurns.first.status, TurnStatus.kept);
       expect(ai.cleanTurns.first.text, ai.cleanTurns.first.rawText);
@@ -368,7 +403,7 @@ void main() {
         },
       );
       final session = sessionWith(phoneRun);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       await ai.runAll();
       expect(ai.state, MeetingAiState.done);
       expect(ai.summary!.bullets, hasLength(2));
@@ -392,7 +427,7 @@ void main() {
             : '{"answer": "They use a notebook.", "supported": true, "sources": ["s-0001"]}',
       );
       final session = sessionWith(phoneRun);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       final streamed = <String>[];
       ai.addListener(() => streamed.add(ai.streamingAnswer));
       final yes = await ai.ask('How do they track orders?');
@@ -418,7 +453,7 @@ void main() {
         },
       );
       final session = sessionWith(phoneRun);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       final a = await ai.ask('How?');
       expect(a.supported, isFalse);
       expect(ai.state, MeetingAiState.error);
@@ -431,7 +466,7 @@ void main() {
     test('model_missing during polish ends in error, original text intact', () async {
       final engine = engineWith(clean: (t) => throw const EngineException(EngineErrorCode.modelMissing, 'no model'));
       final session = sessionWith(phoneRun);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       await ai.runAll();
       expect(ai.state, MeetingAiState.error);
       expect(ai.summary, isNull);
@@ -446,7 +481,7 @@ void main() {
         (1, 'Our client is Acme Logistix and they pay on Friday.', 0, 3000),
         (2, 'I will call Logistix on Monday.', 4000, 6000),
       ]);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       expect(ai.cleanTurns, hasLength(2));
       expect(ai.replaceAll('logistix', 'Logistics'), 2);
       expect(ai.originalLines.first.text, 'Our client is Acme Logistics and they pay on Friday.');
@@ -476,7 +511,7 @@ void main() {
         (1, 'we need a better way to track orders', 0, 3000),
         (2, 'yes the notebook keeps losing pages', 8000, 10000),
       ]);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       await ai.runAll();
       expect(engine.cleanCalls, hasLength(2));
       expect(ai.summaryStale, isFalse);
@@ -492,7 +527,7 @@ void main() {
         (1, 'we need a better way to track orders', 0, 3000),
         (1, 'and the notebook keeps losing pages', 3500, 5500),
       ]);
-      final ai = MeetingAiController(engine, session, autoRun: false);
+      final ai = MeetingAiController(engine, session, autoRun: false, llmPolish: true);
       await ai.polish();
       expect(ai.cleanTurns, hasLength(1));
       expect(ai.needsPolish, isFalse);

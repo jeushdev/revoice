@@ -65,9 +65,14 @@ class Turn {
   final int tEndMs;
 }
 
-/// Two lines are one thought when the gap is short and the first one is unfinished (no . ? !),
-/// or the next one clearly continues it (lowercase start, or and/so/but/because/or).
-const maxMergeGapMs = 1500;
+/// Two lines are one thought only when ALL of these hold: same speaker, the gap is under 1 s,
+/// the first line has no . ? ! at the end (an ellipsis counts as unfinished), and the merged turn
+/// stays under [maxMergeWords] words. Two lines that each end a sentence are never merged, which
+/// also stops two people the diarizer called one speaker from being glued together.
+const maxMergeGapMs = 1000;
+const maxMergeWords = 40;
+
+int _wordCount(String text) => text.trim().isEmpty ? 0 : text.trim().split(RegExp(r'\s+')).length;
 
 final _continuers = RegExp(r'^(and|so|but|because|or)\b', caseSensitive: false);
 final _sentenceEnd = RegExp(r'''[.?!]["')\]]*$''');
@@ -85,13 +90,12 @@ bool _startsLowercase(String text) {
   return c.toLowerCase() == c && c.toUpperCase() != c; // a letter, and not uppercase
 }
 
-bool shouldMerge(MergeLine prev, MergeLine next) {
+/// [wordsSoFar] is the size of the turn [prev] belongs to (it defaults to [prev] alone).
+bool shouldMerge(MergeLine prev, MergeLine next, {int? wordsSoFar}) {
   if (prev.speakerId != next.speakerId) return false;
-  final gap = next.tStartMs - prev.tEndMs;
-  if (gap >= maxMergeGapMs) return false;
-  return !endsSentence(prev.text) ||
-      _startsLowercase(next.text) ||
-      _continuers.hasMatch(next.text.trimLeft());
+  if (next.tStartMs - prev.tEndMs >= maxMergeGapMs) return false;
+  if (endsSentence(prev.text)) return false;
+  return (wordsSoFar ?? _wordCount(prev.text)) + _wordCount(next.text) < maxMergeWords;
 }
 
 /// Joins consecutive same-speaker fragments into turns. [lines] must be in time order.
@@ -108,7 +112,9 @@ List<Turn> mergeFragments(List<MergeLine> lines) {
       tStartMs: line.tStartMs,
       tEndMs: line.tEndMs,
     );
-    if (previous != null && turns.isNotEmpty && shouldMerge(previous, current)) {
+    if (previous != null &&
+        turns.isNotEmpty &&
+        shouldMerge(previous, current, wordsSoFar: _wordCount(turns.last.rawText))) {
       final last = turns.removeLast();
       turns.add(
         Turn(

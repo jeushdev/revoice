@@ -51,6 +51,7 @@ func run() throws {
         for step in manifest["steps"] as! [[String: Any]] {
             let prompt = try String(contentsOfFile: step["prompt"] as! String, encoding: .utf8)
             let grammar = (step["grammar"] as? String).map { try! String(contentsOfFile: $0, encoding: .utf8) }
+            runner.injectDecodeFailures = step["injectFailures"] as? Int ?? 0
             let started = DispatchTime.now()
             let out = try runner.generate(
                 prompt: prompt, system: (step["system"] as? String).map { try! String(contentsOfFile: $0, encoding: .utf8) } ?? system,

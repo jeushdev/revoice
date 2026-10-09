@@ -113,4 +113,50 @@ void main() {
     final all = '${ai.cleanTurns.map((t) => t.text).join(' ')} ${ai.summary!.bullets.map((b) => b.text).join(' ')}';
     expect(all.contains('—') || all.contains('–'), isFalse);
   }, skip: skip, timeout: const Timeout(Duration(minutes: 8)));
+
+  test('sample flow: Stop -> Summary without Clean -> Clean -> Summary -> Ask x3', () async {
+    final engine = MacLlmEngine(Directory.systemTemp.createTempSync());
+    final session = sessionWith(const [
+      (1, 'Hi Jun, thanks for making time.', 0, 2500),
+      (2, 'Sure, so um tell me about your business.', 3000, 5500),
+      (1, 'Honestly...', 6500, 7400),
+      (1, 'Is the paperwork', 7700, 8800),
+      (1, 'We track all our orders in a notebook.', 9200, 11500),
+      (1, 'And things get lost.', 11900, 13000),
+      (2, 'That sounds painful, how many orders a week?', 14500, 17000),
+      (1, 'About forty, mostly from Facebook', 18000, 20000),
+      (1, 'and uh some by text.', 20300, 21500),
+      (2, 'Okay, I can set up a simple order tracker for you.', 23000, 26000),
+      (2, "I'll send you a demo by next Friday.", 26500, 28500),
+      (1, 'Great, I will share the price list with you on Monday.', 30000, 33000),
+      (2, 'And the budget is around fifteen thousand pesos, right?', 34000, 37000),
+      (1, 'Yes, that works for us.', 38000, 39500),
+    ]);
+    final ai = MeetingAiController(engine, session, autoRun: false);
+    var w = Stopwatch()..start();
+    await ai.summarize(); // straight after Stop, before any Clean
+    print('SUMMARY-WITHOUT-CLEAN ${w.elapsedMilliseconds} ms state=${ai.state} bullets=${ai.summary?.bullets.length}');
+    expect(ai.state, MeetingAiState.done);
+    w.reset();
+    await ai.polish();
+    print('CLEAN ${w.elapsedMilliseconds} ms, llm calls so far: ${engine.calls.where((c) => c == 'clean').length}');
+    for (final t in ai.cleanTurns) {
+      print('  [${t.id}] ${session.displayName(t.speakerId)}: ${t.text}');
+    }
+    expect(engine.calls.where((c) => c == 'clean'), isEmpty);
+    w.reset();
+    await ai.summarize();
+    print('SUMMARY ${w.elapsedMilliseconds} ms');
+    for (final b in ai.summary!.bullets) {
+      print('  [${b.kind.name}] ${b.text} <- ${b.sources}');
+    }
+    print('SUGGESTED ${ai.suggestedQuestions}');
+    for (final q in ['When will Jun send the demo?', "What is Maria's business address?", 'Who shares the price list and when?']) {
+      w.reset();
+      final a = await ai.ask(q);
+      print('ASK ${w.elapsedMilliseconds} ms: $q -> ${a.answer} supported=${a.supported} <- ${a.sources}');
+    }
+    expect(ai.state, MeetingAiState.done);
+    expect(ai.answers[1].answer, 'Not mentioned in the conversation.');
+  }, skip: skip, timeout: const Timeout(Duration(minutes: 8)));
 }

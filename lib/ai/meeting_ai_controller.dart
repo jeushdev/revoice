@@ -42,7 +42,7 @@ class TranscriptLine {
 /// Listen to this object (it is a [ChangeNotifier]); read [state], [cleanTurns], [summary],
 /// [suggestedQuestions], [answers], [streamingAnswer].
 class MeetingAiController extends ChangeNotifier {
-  MeetingAiController(this.engine, this.session, {this.autoRun = true}) {
+  MeetingAiController(this.engine, this.session, {this.autoRun = true, this.llmPolish = false}) {
     session.addListener(_onSessionChanged);
     _tokens = engine.events.listen(_onEngineEvent);
   }
@@ -53,10 +53,15 @@ class MeetingAiController extends ChangeNotifier {
   /// When true, polishing + summary + suggested questions start by themselves right after Stop.
   final bool autoRun;
 
+  /// Per-turn LLM punctuation. OFF by default: on the phone it took 53 s for 10 turns and the
+  /// small model mostly failed the word guard. Off means "Clean" = merge rules + filler removal +
+  /// a capital first letter, instantly and with no model call. The LLM code stays behind this flag.
+  final bool llmPolish;
+
   /// Longest transcript sent to the model (~4 chars per token; the model's window is 4096 tokens
   /// and needs room for the question and answer). Older turns are left out of the summary and
   /// Q&A, never out of the transcript view. See [transcriptTruncated].
-  static const maxTranscriptChars = 8000;
+  static const maxTranscriptChars = 6000;
 
   MeetingAiState state = MeetingAiState.idle;
   String? errorMessage;
@@ -171,6 +176,13 @@ class MeetingAiController extends ChangeNotifier {
   }
 
   Future<void> _polishTurn(Turn turn) async {
+    if (!llmPolish) {
+      final ruled = capitalizeFirst(stripFillers(turn.rawText));
+      turn.text = ruled.isEmpty ? turn.rawText : ruled;
+      turn.status = TurnStatus.polished;
+      _polishCache[turn.rawText] = (text: turn.text, status: turn.status);
+      return;
+    }
     final input = stripFillers(turn.hintedText); // fillers are removed by a rule, not by the model
     if (input.split(' ').length <= 3) {
       turn.text = simplePolish(turn.rawText); // not worth a model call

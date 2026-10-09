@@ -155,9 +155,17 @@ const _stopwords = {
   'mentioned', 'discussed', 'conversation', 'meeting', 'speaker', 'discuss', 'talk', 'talked',
 };
 
+/// "orders" and "order", "tracking" and "track" should match: drop a plural or -ing/-ed ending.
+String _stem(String w) {
+  if (w.length > 5 && w.endsWith('ing')) return w.substring(0, w.length - 3);
+  if (w.length > 4 && w.endsWith('ed')) return w.substring(0, w.length - 2);
+  if (w.length > 3 && w.endsWith('s') && !w.endsWith('ss')) return w.substring(0, w.length - 1);
+  return w;
+}
+
 Set<String> _contentWords(String text) => {
   for (final m in RegExp(r"[a-z0-9]+").allMatches(text.toLowerCase().replaceAll("'", '')))
-    if (m.group(0)!.length >= 3 && !_stopwords.contains(m.group(0))) m.group(0)!,
+    if (m.group(0)!.length >= 3 && !_stopwords.contains(m.group(0))) _stem(m.group(0)!),
 };
 
 /// Finds the transcript turns that really contain [claim]'s words (the 1.5B model's own citations

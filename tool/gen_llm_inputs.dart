@@ -33,6 +33,9 @@ const script = <(int, String, int, int)>[
   (1, 'Yes, that works for us.', 38000, 39500),
 ];
 
+/// Per-turn LLM polish is off in the app now; pass `llm` as a third argument to try it again.
+bool llmPolish = false;
+
 const questions = [
   'When will Jun send the demo?',
   "What is Maria's business address?",
@@ -69,6 +72,7 @@ void evaluate(String d) {
 
 void main(List<String> args) {
   final mode = args[0];
+  llmPolish = args.contains('llm');
   if (mode == 'eval') return evaluate(Directory(args[1]).path);
   final dir = Directory(args[1])..createSync(recursive: true);
   final d = dir.path;
@@ -100,7 +104,7 @@ void main(List<String> args) {
   for (var i = 0; i < all.length; i++) {
     final f = File('$d/polish_$i.out');
     var text = all[i].rawText;
-    if (f.existsSync()) {
+    if (llmPolish && f.existsSync()) {
       final candidate = sanitizeModelText(f.readAsStringSync());
       if (passesWordGuard(text, candidate)) {
         text = capitalizeFirst(candidate);
@@ -109,7 +113,7 @@ void main(List<String> args) {
         print('GUARD REJECTED turn $i:\n  raw : $text\n  model: $candidate');
       }
     } else {
-      text = simplePolish(text);
+      text = capitalizeFirst(stripFillers(text)); // what Clean does now (rules only, no model)
     }
     lines.add('[${all[i].id}] ${names[all[i].speakerId]}: $text');
     ids.add(all[i].id);

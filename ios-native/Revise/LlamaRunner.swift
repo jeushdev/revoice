@@ -22,6 +22,11 @@ struct LlmStats {
     }
 }
 
+/// llama_decode returned a non-zero code (-3 and below are fatal compute errors, 1 = no KV slot).
+struct LlamaDecodeError: Error {
+    let code: Int32
+}
+
 struct LlamaError: Error, CustomStringConvertible {
     let description: String
 }
@@ -34,10 +39,16 @@ struct LlamaError: Error, CustomStringConvertible {
 /// system prompt / instruction block is paid for once.
 final class LlamaRunner {
     private let model: OpaquePointer
-    private let context: OpaquePointer
+    private var context: OpaquePointer
     private let vocab: OpaquePointer
     private let chatTemplate: String
-    private let batchSize = 512
+    /// Prompt tokens per GPU pass. Small on purpose: on the phone a long single Metal command (a
+    /// 512-token pass takes seconds while Flutter is also drawing) can be killed by iOS, which
+    /// llama.cpp reports as a decode failure (code -3). 128 keeps every command short.
+    private var batchSize = LlamaRunner.safeBatch
+    private static let safeBatch = 128
+    /// Test hook (MacLlmTest): make the next N decode calls fail, to exercise the recovery ladder.
+    var injectDecodeFailures = 0
 
     /// Tokens currently held in the KV cache (the prompt of the last call).
     private var cachedTokens: [llama_token] = []
@@ -88,23 +99,9 @@ final class LlamaRunner {
             throw LlamaError(description: "Could not load the LLM file (corrupt, or not enough memory)")
         }
 
-        var contextParams = llama_context_default_params()
-        contextParams.n_ctx = UInt32(contextSize)
-        contextParams.n_batch = UInt32(batchSize)
-        contextParams.n_ubatch = UInt32(batchSize)             // process 512 prompt tokens per GPU pass
-        contextParams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_ENABLED
-        // With every layer on the GPU the CPU threads only orchestrate. The iPhone 13 has 2 fast
-        // cores; using the 4 slow ones too makes the CPU side wait on stragglers.
-        let fastThreads = Int32(max(1, min(2, ProcessInfo.processInfo.activeProcessorCount / 3)))
-        contextParams.n_threads = fastThreads
-        contextParams.n_threads_batch = fastThreads
-        var createdContext = llama_init_from_model(loadedModel, contextParams)
-        if createdContext == nil {
-            // Flash attention unsupported on this device? Retry with the default (auto) setting.
-            contextParams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO
-            createdContext = llama_init_from_model(loadedModel, contextParams)
-        }
-        guard let loadedContext = createdContext else {
+        guard let loadedContext = Self.makeContext(
+            model: loadedModel, contextSize: contextSize, batch: Self.safeBatch, flash: true)
+        else {
             llama_model_free(loadedModel)
             throw LlamaError(description: "Could not create the LLM context (not enough memory?)")
         }
@@ -121,13 +118,59 @@ final class LlamaRunner {
 
         Self.logLock.lock(); diagnostics = Self.logLines; Self.logLock.unlock()
         NSLog("REVISE-LLM loaded in %d ms, context %d tokens, threads %d, free memory before=%d MB after=%d MB",
-              loadMs, contextSize, fastThreads, memBefore, Self.availableMemoryMB())
+              loadMs, contextSize, Self.threads, memBefore, Self.availableMemoryMB())
         for line in diagnostics { NSLog("REVISE-LLM-INIT %@", line) }
     }
 
     deinit {
         llama_free(context)
         llama_model_free(model)
+    }
+
+    // MARK: - Context creation and recovery
+
+    /// With every layer on the GPU the CPU threads only orchestrate. The iPhone 13 has 2 fast
+    /// cores; using the 4 slow ones too makes the CPU side wait on stragglers.
+    private static var threads: Int32 { Int32(max(1, min(2, ProcessInfo.processInfo.activeProcessorCount / 3))) }
+
+    private static func makeContext(model: OpaquePointer, contextSize: Int, batch: Int, flash: Bool) -> OpaquePointer? {
+        var params = llama_context_default_params()
+        params.n_ctx = UInt32(contextSize)
+        params.n_batch = UInt32(batch)
+        params.n_ubatch = UInt32(batch)
+        params.flash_attn_type = flash ? LLAMA_FLASH_ATTN_TYPE_ENABLED : LLAMA_FLASH_ATTN_TYPE_DISABLED
+        params.n_threads = threads
+        params.n_threads_batch = threads
+        if let created = llama_init_from_model(model, params) { return created }
+        // Flash attention unsupported on this device? Retry with the default (auto) setting.
+        params.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_AUTO
+        return llama_init_from_model(model, params)
+    }
+
+    /// One decode call. Failures become `LlamaDecodeError` so `generate` can recover.
+    private func decode(_ batch: llama_batch) throws {
+        if injectDecodeFailures > 0 {
+            injectDecodeFailures -= 1
+            throw LlamaDecodeError(code: -3)
+        }
+        let status = llama_decode(context, batch)
+        if status != 0 { throw LlamaDecodeError(code: status) }
+    }
+
+    /// Recovery after a failed decode. Level 1: forget the KV cache and start the prompt from
+    /// scratch. Level 2: also build a fresh context without flash attention and with tiny passes.
+    private func recover(level: Int) throws {
+        cachedTokens = []
+        if level == 1 {
+            llama_memory_clear(llama_get_memory(context), true)
+            return
+        }
+        guard let fresh = Self.makeContext(model: model, contextSize: contextSize, batch: 64, flash: false) else {
+            throw LlamaError(description: "Could not rebuild the LLM context after a failure (not enough memory?)")
+        }
+        llama_free(context)
+        context = fresh
+        batchSize = 64
     }
 
     // MARK: - Warm-up
@@ -153,6 +196,26 @@ final class LlamaRunner {
     func generate(
         prompt: String, system: String? = nil, maxTokens: Int, grammar: String?,
         onToken: ((String) -> Void)? = nil
+    ) throws -> (text: String, stats: LlmStats) {
+        var level = 0
+        while true {
+            do {
+                return try generateOnce(prompt: prompt, system: system, maxTokens: maxTokens, grammar: grammar, onToken: onToken)
+            } catch let failure as LlamaDecodeError {
+                level += 1
+                NSLog("REVISE-LLM decode failed (code %d, free memory %d MB); recovery level %d",
+                      failure.code, Self.availableMemoryMB(), level)
+                guard level <= 2 else {
+                    throw LlamaError(description: "Decoding failed (code \(failure.code), \(Self.availableMemoryMB()) MB free) even after recovery")
+                }
+                try recover(level: level)
+            }
+        }
+    }
+
+    private func generateOnce(
+        prompt: String, system: String?, maxTokens: Int, grammar: String?,
+        onToken: ((String) -> Void)?
     ) throws -> (text: String, stats: LlmStats) {
         var stats = LlmStats(loadMs: loadMs)
         let formatted = formatChat(system: system, user: prompt)
@@ -198,12 +261,13 @@ final class LlamaRunner {
                     emittedCount = text.count
                 }
             }
-            let status = withUnsafeMutablePointer(to: &token) { pointer -> Int32 in
-                llama_decode(context, llama_batch_get_one(pointer, 1))
-            }
-            guard status == 0 else {
+            do {
+                try withUnsafeMutablePointer(to: &token) { pointer in
+                    try decode(llama_batch_get_one(pointer, 1))
+                }
+            } catch {
                 cachedTokens = []
-                throw LlamaError(description: "Generating failed (code \(status))")
+                throw error
             }
         }
         stats.generatedTokens = generated
@@ -241,10 +305,9 @@ final class LlamaRunner {
         cachedTokens = []                                   // invalid until we finish successfully
         while offset < work.count {
             let count = min(batchSize, work.count - offset)
-            let status = work.withUnsafeMutableBufferPointer { buffer -> Int32 in
-                llama_decode(context, llama_batch_get_one(buffer.baseAddress! + offset, Int32(count)))
+            try work.withUnsafeMutableBufferPointer { buffer in
+                try decode(llama_batch_get_one(buffer.baseAddress! + offset, Int32(count)))
             }
-            guard status == 0 else { throw LlamaError(description: "Decoding the prompt failed (code \(status))") }
             offset += count
         }
         cachedTokens = tokens
