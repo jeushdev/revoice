@@ -79,7 +79,7 @@ class ReviseEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Event
                 emitState(State.STOPPED)
                 result.success(true)
             }
-            "generateCrm", "cleanLine" -> runLlm(call, result)
+            "generate", "cleanLine" -> runLlm(call, result)
             else -> result.notImplemented()
         }
     }
@@ -90,6 +90,8 @@ class ReviseEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Event
         if (!llmAssetsPresent) return result.error("model_missing", "Bundled LLM not found.", null)
         val prompt = call.argument<String>("prompt") ?: return result.error("inference_failed", "Missing prompt.", null)
         val maxTokens = call.argument<Int>("maxTokens") ?: 512
+        // generate: json=true means constrain output to JSON (grammar) when possible.
+        @Suppress("UNUSED_VARIABLE") val json = call.argument<Boolean>("json") ?: false
         llmBusy = true
         Thread {
             // TODO(sam): load Gemma 4 E2B (LiteRT-LM) or Qwen 2.5 1.5B (llama.cpp) lazily, run prompt, return raw text.
@@ -100,7 +102,7 @@ class ReviseEnginePlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Event
                 if (output == null) {
                     result.error("inference_failed", "LLM not wired in yet.", null)
                 } else {
-                    result.success(if (call.method == "generateCrm") mapOf("json" to output) else mapOf("text" to output))
+                    result.success(mapOf("text" to output))
                 }
             }
         }.start()

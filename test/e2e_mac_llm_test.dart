@@ -37,7 +37,7 @@ class MacLlmEngine implements CaptionEngine {
   }
 
   @override
-  Future<String> generate({required String prompt, int maxTokens = 512, String? system, Object? jsonGrammar, String? requestId}) {
+  Future<String> generate({required String prompt, int maxTokens = 512, bool json = true, String? system, Object? jsonGrammar, String? requestId}) {
     calls.add('generate');
     return _run(prompt, system: system ?? 'You are a precise assistant.', grammar: jsonGrammar as String?);
   }
@@ -50,8 +50,6 @@ class MacLlmEngine implements CaptionEngine {
 
   @override
   Stream<EngineEvent> get events => const Stream.empty();
-  @override
-  Future<String> generateCrm({required String prompt, int maxTokens = 512}) async => '{}';
   @override
   Future<InitResult> init() async => const InitResult(sttReady: true, llmReady: true);
   @override

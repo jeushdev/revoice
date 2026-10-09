@@ -39,18 +39,6 @@ class PlatformCaptionEngine implements CaptionEngine {
   Future<void> stop() => _call<bool>('stop');
 
   @override
-  Future<String> generateCrm({
-    required String prompt,
-    int maxTokens = 512,
-  }) async {
-    final r = await _call<Map<Object?, Object?>>('generateCrm', {
-      'prompt': prompt,
-      'maxTokens': maxTokens,
-    });
-    return r?['json'] as String? ?? '';
-  }
-
-  @override
   Future<String> cleanLine({
     required String text,
     required String prompt,
@@ -68,15 +56,17 @@ class PlatformCaptionEngine implements CaptionEngine {
   Future<String> generate({
     required String prompt,
     int maxTokens = 512,
+    bool json = true,
     String? system,
     Object? jsonGrammar,
     String? requestId,
   }) async {
+    final grammar = jsonGrammar ?? (json ? true : null);
     final r = await _call<Map<Object?, Object?>>('generate', {
       'prompt': prompt,
       'maxTokens': maxTokens,
       if (system != null) 'system': system,
-      if (jsonGrammar != null) 'jsonGrammar': jsonGrammar,
+      if (grammar != null) 'jsonGrammar': grammar,
       if (requestId != null) 'requestId': requestId,
     });
     return r?['text'] as String? ?? '';

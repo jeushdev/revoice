@@ -33,7 +33,9 @@ class Segment {
   int? suggestedSpeakerId;
 }
 
-enum NameSource { auto, manual }
+/// auto: heard live (name rules). suggested: matched by the LLM after Stop
+/// from the names entered before recording. manual: typed by the user.
+enum NameSource { auto, suggested, manual }
 
 class SpeakerName {
   const SpeakerName(this.name, this.source);
@@ -53,8 +55,21 @@ class SessionController extends ChangeNotifier {
   InitResult? initResult;
   bool interrupted = false;
 
+  /// Wall-clock start of the session, for the Library.
+  DateTime? startedAt;
+
+  /// Session time when the mic dropped (state `error`), for the banner.
+  int? interruptedAtMs;
+  final Stopwatch _clock = Stopwatch();
+
+  /// Listening time so far (pauses excluded).
+  Duration get elapsed => _clock.elapsed;
+
   final Map<String, Segment> _segments = {};
   final Map<int, SpeakerName> speakerNames = {};
+
+  /// Names entered before recording (optional). Context for the LLM only.
+  List<String> expectedNames = const [];
   ({String name, int fromSpeaker})? _pendingCall;
   StreamSubscription<EngineEvent>? _sub;
   Completer<void>? _stoppedSeen;
@@ -192,12 +207,28 @@ class SessionController extends ChangeNotifier {
     useSuggestions = false;
     _pendingCall = null;
     interrupted = false;
+    interruptedAtMs = null;
     errorMessage = null;
+    lastErrorCode = null;
+    _clock
+      ..stop()
+      ..reset();
     await _guard(() => engine.start());
+    if (lastErrorCode == null) {
+      startedAt = DateTime.now();
+      _clock.start();
+    }
   }
 
-  Future<void> pause() => _guard(engine.pause);
-  Future<void> resume() => _guard(engine.resume);
+  Future<void> pause() async {
+    await _guard(engine.pause);
+    _clock.stop();
+  }
+
+  Future<void> resume() async {
+    await _guard(engine.resume);
+    if (state == EngineState.listening) _clock.start();
+  }
 
   /// Resolves after native confirmed `stopped` and pending lines are flushed.
   Future<void> stop() async {
@@ -206,7 +237,8 @@ class SessionController extends ChangeNotifier {
     if (state != EngineState.stopped) {
       await seen.future.timeout(const Duration(seconds: 5), onTimeout: () {});
     }
-    // Unconfirmed partials are excluded from the transcript and CRM.
+    _clock.stop();
+    // Unconfirmed partials are excluded from the transcript and summary.
     _segments.removeWhere((_, s) => !s.isFinal);
     _applySuggestions(); // before CRM cards are generated, so cards use the suggested labels
     notifyListeners();
@@ -224,6 +256,22 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// LLM match from [expectedNames]. Never overrides a manual name, and
+  /// replaces a live-heard name only when that name was not on the list.
+  void suggestName(int speakerId, String name) {
+    final current = speakerNames[speakerId];
+    if (speakerId == 0 || current?.source == NameSource.manual) return;
+    if (current != null &&
+        current.source == NameSource.auto &&
+        expectedNames.any(
+          (n) => n.toLowerCase() == current.name.toLowerCase(),
+        )) {
+      return;
+    }
+    speakerNames[speakerId] = SpeakerName(name, NameSource.suggested);
+    notifyListeners();
+  }
+
   void _onEvent(EngineEvent event) {
     switch (event) {
       case CaptionEvent():
@@ -237,6 +285,8 @@ class SessionController extends ChangeNotifier {
         if (state == EngineState.error) {
           errorMessage = message;
           interrupted = true;
+          interruptedAtMs = _clock.elapsedMilliseconds;
+          _clock.stop();
         }
         if (state == EngineState.stopped || state == EngineState.error) {
           _stoppedSeen?.complete();
@@ -305,7 +355,8 @@ class SessionController extends ChangeNotifier {
   }
 
   void _assignAuto(int speakerId, String name) {
-    if (speakerNames[speakerId]?.source == NameSource.manual) return;
+    final source = speakerNames[speakerId]?.source;
+    if (source == NameSource.manual || source == NameSource.suggested) return;
     speakerNames[speakerId] = SpeakerName(name, NameSource.auto);
   }
 

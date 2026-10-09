@@ -11,8 +11,17 @@ enum MockScenario {
   /// Listening with no speech at all.
   emptySpeech,
 
-  /// Like [meeting], but Sam's CRM card fails twice before a manual retry works.
-  crmFailure,
+  /// Like [meeting], but the summary fails until the user taps Retry.
+  summaryFailure,
+
+  /// The mic drops after five lines (state `error`); earlier lines are kept.
+  micInterrupted,
+
+  /// `start` fails with `permission_denied`.
+  micDenied,
+
+  /// `init` reports no speech model; `start` fails with `model_missing`.
+  modelMissing,
 }
 
 /// Replays a scripted conversation through the exact contract events, so the
@@ -48,7 +57,7 @@ class MockCaptionEngine implements CaptionEngine {
   final _clock = Stopwatch();
   Completer<void>? _resumeGate;
   bool _llmBusy = false;
-  final _crmAttempts = <String, int>{};
+  int _summaryAttempts = 0;
 
   @override
   Stream<EngineEvent> get events => _controller.stream;
@@ -57,12 +66,25 @@ class MockCaptionEngine implements CaptionEngine {
   Future<InitResult> init() async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     _emitState(EngineState.ready);
-    return const InitResult(sttReady: true, llmReady: true);
+    final stt = scenario != MockScenario.modelMissing;
+    return InitResult(sttReady: stt, llmReady: true);
   }
 
   @override
   Future<void> start({String language = 'en'}) async {
     _require({EngineState.ready, EngineState.stopped}, 'start');
+    if (scenario == MockScenario.micDenied) {
+      throw const EngineException(
+        EngineErrorCode.permissionDenied,
+        'Microphone permission denied.',
+      );
+    }
+    if (scenario == MockScenario.modelMissing) {
+      throw const EngineException(
+        EngineErrorCode.modelMissing,
+        'Speech model not found.',
+      );
+    }
     final session = ++_session;
     _segmentCounter = 0;
     _clock
@@ -90,7 +112,11 @@ class MockCaptionEngine implements CaptionEngine {
   @override
   Future<void> stop() async {
     if (_state == EngineState.stopped) return;
-    _require({EngineState.listening, EngineState.paused}, 'stop');
+    _require({
+      EngineState.listening,
+      EngineState.paused,
+      EngineState.error,
+    }, 'stop');
     _session++; // cancels playback; the in-flight line is flushed below
     _flushPending();
     _resumeGate?.complete();
@@ -99,27 +125,127 @@ class MockCaptionEngine implements CaptionEngine {
     _emitState(EngineState.stopped);
   }
 
-  @override
-  Future<String> generateCrm({
-    required String prompt,
-    int maxTokens = 512,
-  }) async {
-    final name =
-        RegExp(
-          r'^Known name: (.+)$',
-          multiLine: true,
-        ).firstMatch(prompt)?.group(1)?.trim() ??
-        '';
-    return _llm(() {
-      final attempt = _crmAttempts[name] = (_crmAttempts[name] ?? 0) + 1;
-      if (scenario == MockScenario.crmFailure &&
-          name == 'Sam' &&
-          attempt <= 2) {
-        return 'Sure! Here is the card: {"name": "Sam", oops';
-      }
-      final card = _cannedCards[name] ?? _emptyCard(name);
-      return jsonEncode(card);
-    });
+  /// Prompts that start with a `TASK:` line (the summary screen's own prompts).
+  Future<String> _generateTask(String prompt) {
+    final task = RegExp(
+      r'^TASK: (\w+)',
+      multiLine: true,
+    ).firstMatch(prompt)?.group(1);
+    return _llm(
+      () => jsonEncode(switch (task) {
+        'match_speakers' => _matchSpeakers(prompt),
+        'summary' => _summary(prompt),
+        'questions' => {'questions': _questions},
+        'answer' => _answer(prompt),
+        _ => throw const EngineException(
+          EngineErrorCode.inferenceFailed,
+          'Unknown task.',
+        ),
+      }),
+    );
+  }
+
+  // --- canned LLM output for the scripted meeting ---------------------
+
+  static const _speakerNames = {1: 'Zairus', 2: 'Jeush', 3: 'Sam', 4: 'Jairus'};
+
+  Map<String, Object?> _matchSpeakers(String prompt) {
+    final names =
+        (RegExp(
+                  r'^Names: (.*)$',
+                  multiLine: true,
+                ).firstMatch(prompt)?.group(1) ??
+                '')
+            .split(',')
+            .map((n) => n.trim().toLowerCase())
+            .toSet();
+    return {
+      'speakers': {
+        for (final MapEntry(:key, :value) in _speakerNames.entries)
+          '$key': names.contains(value.toLowerCase()) ? value : null,
+      },
+    };
+  }
+
+  Map<String, Object?> _summary(String prompt) {
+    if (scenario == MockScenario.summaryFailure && ++_summaryAttempts <= 1) {
+      // Fails the first run; the user's Retry works.
+      throw const EngineException(
+        EngineErrorCode.inferenceFailed,
+        'The model ran out of memory.',
+      );
+    }
+    // Only mentions what the (possibly short) transcript contains.
+    final parts = [
+      'A LarpCode team check-in about the ReVise demo.',
+      if (prompt.contains('demo deck'))
+        'Zairus asked Sam for the demo deck by Friday.',
+      if (prompt.contains('caption screen'))
+        'Jairus is finishing the caption screen tonight.',
+      if (prompt.contains('Monday'))
+        'Jeush set a budget and launch timeline review for Monday.',
+    ];
+    return {'summary': parts.join(' ')};
+  }
+
+  static const _questions = [
+    'What was it about?',
+    'Who took part?',
+    'What are the deadlines?',
+    'What did Sam agree to do?',
+    'What happens on Monday?',
+  ];
+
+  Map<String, Object?> _answer(String prompt) {
+    final q =
+        (RegExp(
+                  r'^Question: (.*)$',
+                  multiLine: true,
+                ).firstMatch(prompt)?.group(1) ??
+                '')
+            .toLowerCase();
+    Map<String, Object?> found(String answer, List<String> sources) => {
+      'found': true,
+      'answer': answer,
+      'sources': sources,
+    };
+    if (q.contains('deadline')) {
+      return found(
+        '- Sam: demo deck by Friday morning\n'
+        '- Jairus: caption screen tonight\n'
+        '- Team: budget and launch timeline review on Monday',
+        ['s-0003', 's-0004', 's-0005', 's-0007'],
+      );
+    }
+    if (q.contains('who')) {
+      return found(
+        '- Zairus, leads product\n'
+        '- Jeush, Android build\n'
+        '- Sam, demo deck\n'
+        '- Jairus, caption screen',
+        ['s-0001', 's-0002', 's-0004', 's-0005'],
+      );
+    }
+    if (q.contains('about')) {
+      return found(
+        'Planning the ReVise demo: who owns the deck, the caption screen and '
+        'the launch timeline.',
+        ['s-0001', 's-0003', 's-0007'],
+      );
+    }
+    if (q.contains('sam')) {
+      return found(
+        'Send the demo deck by Friday morning and email the timeline to '
+        'everyone after the meeting.',
+        ['s-0004', 's-0008'],
+      );
+    }
+    if (q.contains('monday')) {
+      return found('The team reviews the budget and the launch timeline.', [
+        's-0007',
+      ]);
+    }
+    return {'found': false, 'answer': '', 'sources': <String>[]};
   }
 
   /// Demo mode answers the three meeting-AI calls (summary, suggested questions, Q&A) with simple
@@ -129,10 +255,12 @@ class MockCaptionEngine implements CaptionEngine {
   Future<String> generate({
     required String prompt,
     int maxTokens = 512,
+    bool json = true,
     String? system,
     Object? jsonGrammar,
     String? requestId,
   }) async {
+    if (RegExp(r'^TASK: \w+', multiLine: true).hasMatch(prompt)) return _generateTask(prompt);
     final grammar = jsonGrammar is String ? jsonGrammar : '';
     final turns = [
       for (final m in RegExp(r'^\[(s-\d+)\] [^:\n]+: (.+)$', multiLine: true).allMatches(prompt))
@@ -233,6 +361,11 @@ class MockCaptionEngine implements CaptionEngine {
       if (_pendingId == id) _emitCaption(id, text, speaker, true);
       _pendingId = null;
       _pendingLine = null;
+      if (scenario == MockScenario.micInterrupted && _segmentCounter == 5) {
+        _clock.stop();
+        _emitState(EngineState.error, 'Microphone interrupted.');
+        return;
+      }
     }
   }
 
@@ -298,78 +431,12 @@ class MockCaptionEngine implements CaptionEngine {
     }
   }
 
-  void _emitState(EngineState s) {
+  void _emitState(EngineState s, [String? message]) {
     _state = s;
-    _add(StateEvent(s));
+    _add(StateEvent(s, message));
   }
 
   void _add(EngineEvent e) {
     if (!_controller.isClosed) _controller.add(e);
   }
-
-  static Map<String, Object?> _emptyCard(String name) => {
-    'name': name,
-    'role': null,
-    'organization': null,
-    'contact_mentioned': null,
-    'topics': <String>[],
-    'commitments': <Object>[],
-    'follow_up': null,
-    'notes': null,
-    'source_segments': <String, Object>{},
-  };
-
-  static final Map<String, Map<String, Object?>> _cannedCards = {
-    'Zairus': {
-      ..._emptyCard('Zairus'),
-      'role': 'Product lead',
-      'organization': 'LarpCode',
-      'topics': ['demo deck'],
-      'source_segments': {
-        'name': ['s-0001'],
-        'role': ['s-0001'],
-        'organization': ['s-0001'],
-        'topics[0]': ['s-0003'],
-      },
-    },
-    'Jeush': {
-      ..._emptyCard('Jeush'),
-      'role': 'Android build',
-      'topics': ['budget', 'launch timeline'],
-      'source_segments': {
-        'name': ['s-0002'],
-        'role': ['s-0002'],
-        'topics[0]': ['s-0007'],
-        'topics[1]': ['s-0007'],
-      },
-    },
-    'Sam': {
-      ..._emptyCard('Sam'),
-      'topics': ['demo deck', 'timeline'],
-      'commitments': [
-        {'what': 'send the deck', 'due': 'Friday morning'},
-        {'what': 'email the timeline to everyone', 'due': null},
-      ],
-      'source_segments': {
-        'topics[0]': ['s-0004'],
-        'topics[1]': ['s-0008'],
-        'commitments[0].what': ['s-0004'],
-        'commitments[0].due': ['s-0004'],
-        'commitments[1].what': ['s-0008'],
-      },
-    },
-    'Jairus': {
-      ..._emptyCard('Jairus'),
-      'topics': ['caption screen'],
-      'commitments': [
-        {'what': 'finish the caption screen', 'due': 'tonight'},
-      ],
-      'source_segments': {
-        'name': ['s-0005'],
-        'topics[0]': ['s-0005'],
-        'commitments[0].what': ['s-0005'],
-        'commitments[0].due': ['s-0005'],
-      },
-    },
-  };
 }

@@ -21,13 +21,12 @@ class _Engine implements CaptionEngine {
   @override
   Future<void> stop() async => controller.add(const StateEvent(EngineState.stopped, null));
   @override
-  Future<String> generateCrm({required String prompt, int maxTokens = 512}) async => '';
-  @override
   Future<String> cleanLine({required String text, required String prompt, int maxTokens = 512}) async => text;
   @override
   Future<String> generate({
     required String prompt,
     int maxTokens = 512,
+    bool json = true,
     String? system,
     Object? jsonGrammar,
     String? requestId,
