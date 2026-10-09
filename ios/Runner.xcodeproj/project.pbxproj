@@ -22,6 +22,9 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		BABEDBAC40E6BF4B079033CE /* LlamaFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 0B9C0EE8594AE2C2A46FFA66 /* LlamaFramework */; };
+		BD6ABB45A662573DB3116BF0 /* ReviseGrammars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DF684E6372CBF02ECFBEC8D /* ReviseGrammars.swift */; };
+		C7083A5E0202AADA6D42F97A /* LlamaRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61EF128BDC18E2A666872BB /* LlamaRunner.swift */; };
 		CC2713A2F5972891C332A8C1 /* ReviseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C989B8F49E6194DA5CDE244 /* ReviseEngine.swift */; };
 /* End PBXBuildFile section */
 
@@ -51,6 +54,7 @@
 /* Begin PBXFileReference section */
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
+		1DF684E6372CBF02ECFBEC8D /* ReviseGrammars.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReviseGrammars.swift; path = "../ios-native/Revise/ReviseGrammars.swift"; sourceTree = SOURCE_ROOT; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
@@ -69,6 +73,7 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C61EF128BDC18E2A666872BB /* LlamaRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LlamaRunner.swift; path = "../ios-native/Revise/LlamaRunner.swift"; sourceTree = SOURCE_ROOT; };
 		C689D036302D15E99AE37AA5 /* ReviseModelStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReviseModelStore.swift; path = "../ios-native/Revise/ReviseModelStore.swift"; sourceTree = SOURCE_ROOT; };
 		D60BFC1671561F766FC14B11 /* Models */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = Models; path = "../ios-native/Models"; sourceTree = SOURCE_ROOT; };
 		FA96522C70E0D96C07124CE7 /* MoonshineMic.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MoonshineMic.swift; path = "../ios-native/Revise/MoonshineMic.swift"; sourceTree = SOURCE_ROOT; };
@@ -81,6 +86,7 @@
 			files = (
 				78A318202AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage in Frameworks */,
 				3556D63D9F96131E9243B8BA /* MoonshineVoice in Frameworks */,
+				BABEDBAC40E6BF4B079033CE /* LlamaFramework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -144,6 +150,8 @@
 				6ADB33F382CBE1AE633CC235 /* CaptionTracker.swift */,
 				C689D036302D15E99AE37AA5 /* ReviseModelStore.swift */,
 				FA96522C70E0D96C07124CE7 /* MoonshineMic.swift */,
+				C61EF128BDC18E2A666872BB /* LlamaRunner.swift */,
+				1DF684E6372CBF02ECFBEC8D /* ReviseGrammars.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -187,6 +195,7 @@
 			packageProductDependencies = (
 				78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */,
 				BEAD3BD68734DC327D0A76FB /* MoonshineVoice */,
+				0B9C0EE8594AE2C2A46FFA66 /* LlamaFramework */,
 			);
 			productName = Runner;
 			productReference = 97C146EE1CF9000F007C117D /* Runner.app */;
@@ -224,6 +233,7 @@
 			packageReferences = (
 				781AD8BC2B33823900A9FFBB /* XCLocalSwiftPackageReference "FlutterGeneratedPluginSwiftPackage" */,
 				96659CCBA20B900D1BE0CDCB /* XCRemoteSwiftPackageReference "moonshine-swift" */,
+				A9ADA1E1972AC809A68A44A9 /* XCLocalSwiftPackageReference "LlamaPackage" */,
 			);
 			productRefGroup = 97C146EF1CF9000F007C117D /* Products */;
 			projectDirPath = "";
@@ -312,6 +322,8 @@
 				73040395763A3F03E3FFE513 /* CaptionTracker.swift in Sources */,
 				69516BA09AD31731BD37AEF1 /* ReviseModelStore.swift in Sources */,
 				37A2608AF6BAC85C4AED2B14 /* MoonshineMic.swift in Sources */,
+				C7083A5E0202AADA6D42F97A /* LlamaRunner.swift in Sources */,
+				BD6ABB45A662573DB3116BF0 /* ReviseGrammars.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -662,6 +674,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = Flutter/ephemeral/Packages/FlutterGeneratedPluginSwiftPackage;
 		};
+		A9ADA1E1972AC809A68A44A9 /* XCLocalSwiftPackageReference "LlamaPackage" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = "../ios-native/LlamaPackage";
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -676,6 +692,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0B9C0EE8594AE2C2A46FFA66 /* LlamaFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LlamaFramework;
+		};
 		78A3181F2AECB46A00862997 /* FlutterGeneratedPluginSwiftPackage */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FlutterGeneratedPluginSwiftPackage;

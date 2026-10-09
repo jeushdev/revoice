@@ -18,8 +18,6 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
   private var eventSink: FlutterEventSink?
   private var state: State?   // mirrors the engine's last state event (main thread only)
-  private var llmAssetsPresent = false
-  private var llmBusy = false
 
   /// Moonshine STT + speaker IDs. Events come from audio threads, so hop to main
   /// before touching `state` or the sink; main-queue order keeps events in order.
@@ -65,7 +63,6 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "init":
-      llmAssetsPresent = ReviseModelStore.llmAssetPresent()
       run(result) { await self.engine.initialize() }
     case "start":
       let language = (call.arguments as? [String: Any])?["language"] as? String ?? "en"
@@ -88,7 +85,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         try await self.engine.stop()
         return true
       }
-    case "generateCrm", "cleanLine":
+    case "generateCrm", "cleanLine", "generate":
       handleLlm(call, result)
     default:
       result(FlutterMethodNotImplemented)
@@ -112,37 +109,54 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
   }
 
+  /// On-device LLM calls. All three share one model and run only while stopped:
+  ///  - generateCrm {prompt, maxTokens}            -> {json}  (CRM JSON grammar, PRD section 8)
+  ///  - cleanLine   {text, prompt, maxTokens}      -> {text}  (free text)
+  ///  - generate    {prompt, maxTokens, jsonGrammar?, system?} -> {text}
+  ///      jsonGrammar: true = any valid JSON; a String = your own GBNF grammar; absent = free text.
+  /// Every reply also carries loadMs / promptTokens / generatedTokens / tokensPerSecond.
   private func handleLlm(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-    guard state == .stopped else { return result(invalidState(call.method)) }
-    guard !llmBusy else {
-      return result(
-        FlutterError(code: "invalid_state", message: "LLM request already running.", details: nil))
-    }
-    guard llmAssetsPresent else {
-      return result(
-        FlutterError(code: "model_missing", message: "Bundled LLM not found.", details: nil))
-    }
-    guard let args = call.arguments as? [String: Any],
-      let prompt = args["prompt"] as? String
-    else {
-      return result(
-        FlutterError(code: "inference_failed", message: "Missing prompt.", details: nil))
+    guard let args = call.arguments as? [String: Any], var prompt = args["prompt"] as? String else {
+      return result(FlutterError(code: "inference_failed", message: "Missing prompt.", details: nil))
     }
     let maxTokens = args["maxTokens"] as? Int ?? 512
-    llmBusy = true
-    DispatchQueue.global(qos: .userInitiated).async {
-      // TODO(zairus): load llama.cpp / MLX model lazily, run `prompt` with
-      // `maxTokens` (JSON grammar for generateCrm), return the raw text.
-      _ = (prompt, maxTokens)
-      let output: String? = nil
-      DispatchQueue.main.async {
-        self.llmBusy = false
-        guard let text = output else {
-          return result(
-            FlutterError(code: "inference_failed", message: "LLM not wired in yet.", details: nil))
-        }
-        result(call.method == "generateCrm" ? ["json": text] : ["text": text])
+    var system = args["system"] as? String
+    let grammar: String?
+    switch call.method {
+    case "generateCrm":
+      grammar = ReviseGrammars.crm
+      system = system ?? ReviseGrammars.crmSystem
+    case "cleanLine":
+      grammar = nil
+      // Dart sends the instruction and the line; make sure the line is in the prompt exactly once.
+      if let text = args["text"] as? String, !prompt.contains(text) {
+        prompt += "\n\nLine: \(text)"
       }
+    default:  // "generate"
+      if let custom = args["jsonGrammar"] as? String, !custom.isEmpty {
+        grammar = custom
+      } else if args["jsonGrammar"] as? Bool == true {
+        grammar = ReviseGrammars.anyJson
+      } else {
+        grammar = nil
+      }
+    }
+    let method = call.method
+    let systemText = system
+    run(result) {
+      let out = try await self.engine.generate(
+        prompt: prompt, system: systemText, maxTokens: maxTokens, grammar: grammar)
+      var reply: [String: Any] = [
+        "loadMs": out.stats.loadMs,
+        "promptTokens": out.stats.promptTokens,
+        "generatedTokens": out.stats.generatedTokens,
+        "tokensPerSecond": out.stats.tokensPerSecond,
+      ]
+      switch method {
+      case "generateCrm": reply["json"] = out.text
+      default: reply["text"] = out.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      }
+      return reply
     }
   }
 

@@ -9,16 +9,21 @@
 /* Begin PBXBuildFile section */
 		0C378D258D99EF643B63CBC6 /* MoonshineVoice in Frameworks */ = {isa = PBXBuildFile; productRef = 55A255DABF6F72C4FAA73EDC /* MoonshineVoice */; };
 		0E8B51FDADD1D97B6732764C /* ReviseModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00F4F3700859C07F3065666 /* ReviseModelStore.swift */; };
+		10DD923F4FC9139AEFE2AC34 /* LlamaRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CF4A6B5439554C6C745D03 /* LlamaRunner.swift */; };
 		2B0ACD5F4604F7D1FAEF1793 /* MoonshineMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */; };
 		31C2ED8FD297EB871114ACA0 /* ReviseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1FB12E0BAD58E669C1DC74 /* ReviseEngine.swift */; };
+		4E2843FE6A1D4715FA2B2109 /* ReviseGrammars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F534AAF1CA694474642E485 /* ReviseGrammars.swift */; };
 		77CCBB4C73BA643E2F3F743A /* HarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC454E0B4669E704502B5076 /* HarnessView.swift */; };
 		8AC1B3039A9E1FCD432D2DA4 /* Models in Resources */ = {isa = PBXBuildFile; fileRef = 88BE725ECDF88ED741D18555 /* Models */; };
 		97125BB20F69574834F9A97C /* CaptionTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03CB2EE19A321D9D9E050545 /* CaptionTracker.swift */; };
 		C235F26EF8C285D0A87220B5 /* ReviseHarnessApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDCF2160AB7A182C0711ED0 /* ReviseHarnessApp.swift */; };
+		D16D5E7B91F2EF20FE1CE7B3 /* LlamaFramework in Frameworks */ = {isa = PBXBuildFile; productRef = 0113D5423AC189013A01149A /* LlamaFramework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		03CB2EE19A321D9D9E050545 /* CaptionTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptionTracker.swift; sourceTree = "<group>"; };
+		0F534AAF1CA694474642E485 /* ReviseGrammars.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReviseGrammars.swift; path = ../Revise/ReviseGrammars.swift; sourceTree = SOURCE_ROOT; };
+		31CF4A6B5439554C6C745D03 /* LlamaRunner.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LlamaRunner.swift; path = ../Revise/LlamaRunner.swift; sourceTree = SOURCE_ROOT; };
 		7A1FB12E0BAD58E669C1DC74 /* ReviseEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviseEngine.swift; sourceTree = "<group>"; };
 		88BE725ECDF88ED741D18555 /* Models */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = Models; path = ../Models; sourceTree = SOURCE_ROOT; };
 		98B418EBAE9F3F90B38AC666 /* ReviseHarness.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReviseHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -34,6 +39,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0C378D258D99EF643B63CBC6 /* MoonshineVoice in Frameworks */,
+				D16D5E7B91F2EF20FE1CE7B3 /* LlamaFramework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,6 +82,8 @@
 				C6597E1FFDDE897FF5FF588A /* Products */,
 				88BE725ECDF88ED741D18555 /* Models */,
 				C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */,
+				31CF4A6B5439554C6C745D03 /* LlamaRunner.swift */,
+				0F534AAF1CA694474642E485 /* ReviseGrammars.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -97,6 +105,7 @@
 			name = ReviseHarness;
 			packageProductDependencies = (
 				55A255DABF6F72C4FAA73EDC /* MoonshineVoice */,
+				0113D5423AC189013A01149A /* LlamaFramework */,
 			);
 			productName = ReviseHarness;
 			productReference = 98B418EBAE9F3F90B38AC666 /* ReviseHarness.app */;
@@ -127,6 +136,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				905E03D998932896C0B5BBEA /* XCRemoteSwiftPackageReference "moonshine-swift" */,
+				6A2B73867D103B14E37234F8 /* XCLocalSwiftPackageReference "LlamaPackage" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C6597E1FFDDE897FF5FF588A /* Products */;
@@ -160,6 +170,8 @@
 				C235F26EF8C285D0A87220B5 /* ReviseHarnessApp.swift in Sources */,
 				0E8B51FDADD1D97B6732764C /* ReviseModelStore.swift in Sources */,
 				2B0ACD5F4604F7D1FAEF1793 /* MoonshineMic.swift in Sources */,
+				10DD923F4FC9139AEFE2AC34 /* LlamaRunner.swift in Sources */,
+				4E2843FE6A1D4715FA2B2109 /* ReviseGrammars.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,6 +362,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		6A2B73867D103B14E37234F8 /* XCLocalSwiftPackageReference "LlamaPackage" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../LlamaPackage;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		905E03D998932896C0B5BBEA /* XCRemoteSwiftPackageReference "moonshine-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -362,6 +381,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		0113D5423AC189013A01149A /* LlamaFramework */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = LlamaFramework;
+		};
 		55A255DABF6F72C4FAA73EDC /* MoonshineVoice */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 905E03D998932896C0B5BBEA /* XCRemoteSwiftPackageReference "moonshine-swift" */;

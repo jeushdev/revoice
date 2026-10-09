@@ -6,6 +6,8 @@ options:
   deploymentTarget:
     iOS: "17.0"
 packages:
+  Llama:
+    path: ../LlamaPackage
   Moonshine:
     url: https://github.com/moonshine-ai/moonshine-swift.git
     exactVersion: 0.1.5
@@ -24,6 +26,8 @@ targets:
     dependencies:
       - package: Moonshine
         product: MoonshineVoice
+      - package: Llama
+        product: LlamaFramework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.camyx.revise.harness

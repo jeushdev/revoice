@@ -38,13 +38,17 @@ enum ReviseModelStore {
         return missing.isEmpty ? "" : "Missing from the app: " + missing.joined(separator: ", ")
     }
 
-    /// "Assets are present", not "inference works" (PRD section 7, `llmReady`).
-    static func llmAssetPresent() -> Bool {
+    /// The bundled LLM file (first .gguf in Models/llm, by name), or nil if none is bundled.
+    /// Swapping models = running fetch-models.sh with another LLM; no code change needed.
+    static func llmModelURL() -> URL? {
         guard let dir = bundledRoot()?.appendingPathComponent(llmFolder, isDirectory: true),
             let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path)
-        else { return false }
-        return names.contains { $0.hasSuffix(".gguf") }
+        else { return nil }
+        return names.sorted().first { $0.hasSuffix(".gguf") }.map { dir.appendingPathComponent($0) }
     }
+
+    /// "Assets are present", not "inference works" (PRD section 7, `llmReady`).
+    static func llmAssetPresent() -> Bool { llmModelURL() != nil }
 
     private static func bundledRoot() -> URL? {
         Bundle.main.resourceURL?.appendingPathComponent("Models", isDirectory: true)

@@ -32,7 +32,7 @@ and answers `model_missing`.
 
 ## Models (bundled, no network ever)
 
-Models live in `ios-native/Models/` (about 145 MB, **not in git**). Rebuild them once on a Mac with internet:
+Models live in `ios-native/Models/` (about 1.3 GB with the LLM, **not in git**). Rebuild them once on a Mac with internet:
 
 ```
 sh ios-native/fetch-models.sh
@@ -46,6 +46,43 @@ state says which model is missing (it never waits on the network). Layout inside
 Models/stt-small-streaming/   Moonshine Small Streaming English (8 files)
 Models/diarization/           segmentation.ort, embedding.ort
 Models/llm/*.gguf             (later)
+```
+
+## On-device LLM (llama.cpp + Qwen 2.5 1.5B Instruct Q4_K_M)
+
+- `LlamaPackage/` is a local Swift package that wraps llama.cpp's prebuilt XCFramework (release b11531, Metal GPU).
+  It has an iPhone slice and a Mac slice but **no iOS Simulator slice**: test on a real phone.
+- `Revise/LlamaRunner.swift` loads the GGUF and generates (greedy sampling, optional GBNF grammar).
+  `Revise/ReviseGrammars.swift` holds the CRM grammar, the generic-JSON grammar and the CRM system prompt.
+- Lifecycle (PRD): the LLM is loaded on the first request **after Stop**, after Moonshine is freed; it stays loaded for
+  later requests and is freed before the next `start`. Requests run one at a time and only in state `stopped`.
+- Model file: `Models/llm/*.gguf` (first by name). Switch models with `LLM=0.5b|1.5b|3b sh ios-native/fetch-models.sh`
+  (delete the old .gguf first). 0.5b if the iPhone 13 runs out of memory; 3b only for the 6 GB iPhone 14 Pro Max.
+- Logs: filter the Xcode console by `REVISE-LLM` (load time, free memory, prompt and generation tokens/sec).
+- The CRM system prompt contains a worked example. Without it the 1.5B model returned an empty `source_segments`,
+  which makes Dart's `applyModelOutput` drop every field. Segment citations from this model can still be off by one line.
+
+### Channel methods for Dart (all only while state is `stopped`; errors: `model_missing`, `invalid_state`, `inference_failed`)
+
+| Method | Args | Returns |
+| --- | --- | --- |
+| `generateCrm` | `{prompt, maxTokens}` | `{json}` (CRM grammar enforced) |
+| `cleanLine` | `{text, prompt, maxTokens}` | `{text}` |
+| `generate` | `{prompt, maxTokens, system?, jsonGrammar?}` | `{text}`; `jsonGrammar: true` = any valid JSON, a String = your own GBNF grammar |
+
+Every reply also has `loadMs`, `promptTokens`, `generatedTokens`, `tokensPerSecond`.
+
+Dart side for `generate` (add next to `cleanLine` in `CaptionEngine` / `PlatformCaptionEngine`):
+
+```dart
+Future<String> generate({required String prompt, int maxTokens = 512, String? system, Object? jsonGrammar}) async {
+  final r = await _call<Map<Object?, Object?>>('generate', {
+    'prompt': prompt, 'maxTokens': maxTokens,
+    if (system != null) 'system': system,
+    if (jsonGrammar != null) 'jsonGrammar': jsonGrammar,
+  });
+  return r?['text'] as String? ?? '';
+}
 ```
 
 ## Moonshine SDK gotchas found while testing (0.1.5)

@@ -35,6 +35,12 @@ actor ReviseEngine {
     private var pausedAt: Date?
     private var observers: [NSObjectProtocol] = []
 
+    // On-device LLM (llama.cpp). Loaded on the first request after Stop, kept for later requests,
+    // freed before the next recording starts. Never loaded while Moonshine is loaded.
+    private var llm: LlamaRunner?
+    private var llmBusy = false
+    private let llmQueue = DispatchQueue(label: "revise.llm", qos: .userInitiated)
+
     /// Delivers one event map to Flutter. Must be safe to call from any thread.
     private let sendEvent: @Sendable ([String: Any]) -> Void
 
@@ -51,6 +57,7 @@ actor ReviseEngine {
             // Re-init mid-recording: end the recording first.
             _ = stopRecording()
         }
+        if !llmBusy { llm = nil }          // free the LLM before the speech models load
         releaseSTT()
         let llmReady = ReviseModelStore.llmAssetPresent()
         do {
@@ -70,6 +77,8 @@ actor ReviseEngine {
         guard language == "en" else {
             throw ReviseError(code: .modelMissing, message: "Only English is supported in v1")
         }
+        guard !llmBusy else { throw ReviseError(code: .invalidState, message: "An LLM request is still running") }
+        llm = nil                          // PRD: free the LLM before recording starts
         try await ensureMicPermission()
         try await loadSTT()  // reloads after a previous stop released the models
         guard let mic else { throw ReviseError(code: .modelMissing, message: "Speech model not loaded") }
@@ -152,6 +161,55 @@ actor ReviseEngine {
         #if DEBUG
         NSLog("REVISE-TIMING %@ took %d ms", what, Int(Date().timeIntervalSince(start) * 1000))
         #endif
+    }
+
+    // MARK: - On-device LLM
+
+    struct LlmResult {
+        let text: String
+        let stats: LlmStats
+    }
+
+    /// Runs one prompt on the on-device LLM. Only allowed while stopped (PRD section 7), one
+    /// request at a time. Frees Moonshine first, loads the LLM on first use, and keeps it loaded
+    /// for the next request. `grammar` is optional GBNF text that forces the output's shape.
+    func generate(prompt: String, system: String?, maxTokens: Int, grammar: String?) async throws -> LlmResult {
+        guard state == .stopped else { throw Self.invalidState("LLM request") }
+        guard !llmBusy else { throw ReviseError(code: .invalidState, message: "An LLM request is already running") }
+        guard let modelURL = ReviseModelStore.llmModelURL() else {
+            throw ReviseError(code: .modelMissing, message: "No LLM file is bundled in the app (Models/llm)")
+        }
+        llmBusy = true
+        defer { llmBusy = false }
+
+        releaseSTT()                        // never keep Moonshine and the LLM in memory together
+        do {
+            let runner: LlamaRunner
+            if let loaded = llm {
+                runner = loaded
+            } else {
+                runner = try await onLlmQueue { try LlamaRunner(modelPath: modelURL.path) }
+                llm = runner
+            }
+            let result = try await onLlmQueue {
+                try runner.generate(prompt: prompt, system: system, maxTokens: maxTokens, grammar: grammar)
+            }
+            return LlmResult(text: result.text, stats: result.stats)
+        } catch let error as ReviseError {
+            throw error
+        } catch {
+            throw ReviseError(code: .inferenceFailed, message: "\(error)")
+        }
+    }
+
+    /// Runs blocking work on the LLM queue and resumes when it's done. The actor is free to
+    /// answer other calls meanwhile; `llmBusy` stops them from touching the LLM.
+    private func onLlmQueue<T>(_ work: @escaping () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            llmQueue.async {
+                do { continuation.resume(returning: try work()) } catch { continuation.resume(throwing: error) }
+            }
+        }
     }
 
     // MARK: - Internals
