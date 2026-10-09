@@ -29,10 +29,21 @@ Oct 9, 2026 · @Jairus Macabuhay · Team LarpCode · AppBuildersPH Hackathon 202
 | :---- | :---- | :---- | :---- |
 | Jairus | Flutter UI + shared Dart logic | Windows | All screens, MockEngine, name-detection rules, transcript model, CRM prompt and JSON parsing, text export |
 | Zairus | iOS native backend (Swift) | Mac | iOS module: mic, Moonshine, speaker IDs, on-device LLM for CRM, iOS builds |
-| Jeush | Android native backend (Kotlin) | Windows | Android audio + Moonshine + speaker IDs |
-| Sam | Android native backend (Kotlin) | Windows | Android on-device LLM for CRM, Android builds, README and disclosures |
+| devJ (Jeush) | Android native backend (Kotlin) | Windows | Mic capture, Moonshine transcription/diarization, immutable caption events, speaker IDs and timestamps |
+| devS (Sam) | Android native backend (Kotlin) | Windows | Gemma CRM inference, model assets, channel/controller integration, Android builds, README and disclosures |
 
 **Rule:** native code does audio capture and AI inference. Flutter handles text display, name rules, prompts, validation, and local text storage. Audio never crosses into Dart.
+
+**Android parallel workflow:** devS works on `devs/android-crm-assets`; devJ works on `devj/android-captions-speakers`. Both branch from and open PRs into `codex/kotlin-development`. devS owns the shared native channel/controller files; devJ supplies the capture/STT component and reviews its integration. See [ANDROID_WORK_SPLIT.md](ANDROID_WORK_SPLIT.md) for feature assignments, file ownership, handoffs, and merge gates. Flutter/Dart and iOS work retain the owners above.
+
+| Android feature | devJ owns | devS owns |
+| :---- | :---- | :---- |
+| F1 live captions | Mic capture, bounded PCM queue, Moonshine STT/diarization, caption snapshots | Verified model assets and native channel/controller integration |
+| F2 final transcript | Pause/Stop audio drain and SDK flush, immutable finals and timestamps | Final-event completion barrier, state/errors, STT release before CRM |
+| F3 speaker labels | Stable session IDs 1–4, unknown=0, frozen final attribution | Preserve speaker fields through native channels |
+| F4 CRM cards | Review the speech-to-CRM resource handoff | Gemma/LiteRT-LM, fresh conversations, 512-token output cap, timeout/cancellation and raw output |
+
+Both developers work on the Android backend only. Each uses their own feature branch and submits a PR to `codex/kotlin-development`; the other reviews it. devJ owns the speech files and devS owns the shared controller/registration files, so their implementations can proceed simultaneously without editing the same files. Neither implementation is merged into `main` as part of this workflow.
 
 ## 4. Features (F1–F4 required; F2b optional)
 
