@@ -30,6 +30,15 @@ No APK, native inference, microphone, or M0 acceptance has been demonstrated.
 
 ## Decisions still needed
 
+October 10 follow-up: user authorized required-path SDK safety fixes and desktop
+tests, **not adoption or phone work**. See
+[`SDK_REQUIRED_PATH_FIX.md`](docs/evidence/android/devj/SDK_REQUIRED_PATH_FIX.md)
+for the additional review-only JNI patch, 403 fault/cleanup cases and three-ABI
+syntax checks. Required converter/file-loader source fixes are now prepared;
+second-session core isolation, artifact adoption and device gates remain open.
+The historical candidate AAR/hash below contains only patches 0001/0002, not
+the new 0003 patch.
+
 - **Moonshine SDK:** published `0.1.5` has confirmed discarded JNI statuses,
   unreleased audio-array elements, and a sub-hop Stop-tail mechanism. Read
   `SDK_ARTIFACT_REVIEW.md`, `SDK_FIX_PROPOSAL.md`, and `SDK_FIX_REVIEW.md` in the

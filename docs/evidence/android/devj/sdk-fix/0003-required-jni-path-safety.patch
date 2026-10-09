@@ -1,0 +1,445 @@
+--- a/language-bindings/android/moonshine-jni/moonshine-jni.cpp
++++ b/language-bindings/android/moonshine-jni/moonshine-jni.cpp
+@@ -3,6 +3,7 @@
+ #include <algorithm>
+ #include <cstdint>
+ #include <cstdlib>
++#include <limits>
+ #include <memory>
+ #include <mutex>
+ #include <string>
+@@ -109,34 +110,128 @@
+   return transcript;
+ }
+ 
++// Only the required file-loader and C-to-Java transcript path use these guards.
++// Cleanup operations are permitted while a Java exception remains pending.
++static void revise_check_jni(JNIEnv *env) {
++  if (env->ExceptionCheck()) {
++    throw std::runtime_error("Moonshine JNI operation failed");
++  }
++}
++
++template <typename T> static T revise_jni_value(JNIEnv *env, T value) {
++  revise_check_jni(env);
++  if (value == nullptr) {
++    throw std::runtime_error("Moonshine JNI returned null");
++  }
++  return value;
++}
++
++class ReviseLocalFrame {
++ public:
++  explicit ReviseLocalFrame(JNIEnv *env, jint capacity = 32) : env_(env) {
++    revise_check_jni(env_);
++    if (env_->PushLocalFrame(capacity) != 0) {
++      throw std::runtime_error("Moonshine JNI local frame failed");
++    }
++    if (env_->ExceptionCheck()) {
++      env_->PopLocalFrame(nullptr);
++      throw std::runtime_error("Moonshine JNI local frame failed");
++    }
++  }
++  ~ReviseLocalFrame() { if (active_) env_->PopLocalFrame(nullptr); }
++  ReviseLocalFrame(const ReviseLocalFrame &) = delete;
++  ReviseLocalFrame &operator=(const ReviseLocalFrame &) = delete;
++  jobject keep(jobject result) {
++    active_ = false;
++    return env_->PopLocalFrame(result);
++  }
++ private:
++  JNIEnv *env_;
++  bool active_ = true;
++};
++
++class ReviseUtfChars {
++ public:
++  ReviseUtfChars(JNIEnv *env, jstring value) : env_(env), value_(value) {
++    revise_check_jni(env_);
++    if (value_ != nullptr) {
++      chars_ = env_->GetStringUTFChars(value_, nullptr);
++      // Take ownership before checking: release even if acquisition also
++      // leaves an exception pending, without clearing that exception.
++      if (env_->ExceptionCheck() || chars_ == nullptr) {
++        if (chars_ != nullptr) env_->ReleaseStringUTFChars(value_, chars_);
++        chars_ = nullptr;
++        throw std::runtime_error("Moonshine JNI UTF acquisition failed");
++      }
++    }
++  }
++  ~ReviseUtfChars() {
++    if (chars_ != nullptr) env_->ReleaseStringUTFChars(value_, chars_);
++  }
++  ReviseUtfChars(const ReviseUtfChars &) = delete;
++  ReviseUtfChars &operator=(const ReviseUtfChars &) = delete;
++  const char *get() const { return chars_; }
++ private:
++  JNIEnv *env_;
++  jstring value_;
++  const char *chars_ = nullptr;
++};
++
++static jclass revise_get_class(JNIEnv *env, const char *name) {
++  return revise_jni_value(env, env->FindClass(name));
++}
++static jfieldID revise_get_field(JNIEnv *env, jclass type, const char *name,
++                                const char *signature) {
++  return revise_jni_value(env, env->GetFieldID(type, name, signature));
++}
++static jmethodID revise_get_method(JNIEnv *env, jclass type, const char *name,
++                                  const char *signature) {
++  return revise_jni_value(env, env->GetMethodID(type, name, signature));
++}
++
++#define REVISE_JNI_CALL(operation) do { operation; revise_check_jni(env); } while (false)
++
+ static jobject c_transcript_to_jobject(JNIEnv *env,
+-                                       struct transcript_t *transcript) {
+-  jclass listClass = get_class(env, "java/util/ArrayList");
++                                        struct transcript_t *transcript) {
++  ReviseLocalFrame frame(env);
++  if (transcript == nullptr ||
++      transcript->line_count > static_cast<uint64_t>(std::numeric_limits<jsize>::max()) ||
++      (transcript->line_count != 0 && transcript->lines == nullptr)) {
++    return nullptr;
++  }
++  jclass listClass = revise_get_class(env, "java/util/ArrayList");
+   jmethodID addMethod =
+-      get_method(env, listClass, "add", "(Ljava/lang/Object;)Z");
+-
+-  jclass lineClass = get_class(env, "ai/moonshine/voice/TranscriptLine");
+-  jfieldID textField = get_field(env, lineClass, "text", "Ljava/lang/String;");
+-  jfieldID audioDataField = get_field(env, lineClass, "audioData", "[F");
+-  jfieldID startTimeField = get_field(env, lineClass, "startTime", "F");
+-  jfieldID durationField = get_field(env, lineClass, "duration", "F");
+-  jfieldID idField = get_field(env, lineClass, "id", "J");
+-  jfieldID isCompleteField = get_field(env, lineClass, "isComplete", "Z");
+-  jfieldID isUpdatedField = get_field(env, lineClass, "isUpdated", "Z");
+-  jfieldID isNewField = get_field(env, lineClass, "isNew", "Z");
++      revise_get_method(env, listClass, "add", "(Ljava/lang/Object;)Z");
++
++  jclass lineClass = revise_get_class(env, "ai/moonshine/voice/TranscriptLine");
++  jfieldID textField = revise_get_field(env, lineClass, "text", "Ljava/lang/String;");
++  jfieldID audioDataField = revise_get_field(env, lineClass, "audioData", "[F");
++  jfieldID startTimeField = revise_get_field(env, lineClass, "startTime", "F");
++  jfieldID durationField = revise_get_field(env, lineClass, "duration", "F");
++  jfieldID idField = revise_get_field(env, lineClass, "id", "J");
++  jfieldID isCompleteField = revise_get_field(env, lineClass, "isComplete", "Z");
++  jfieldID isUpdatedField = revise_get_field(env, lineClass, "isUpdated", "Z");
++  jfieldID isNewField = revise_get_field(env, lineClass, "isNew", "Z");
+   jfieldID hasTextChangedField =
+-      get_field(env, lineClass, "hasTextChanged", "Z");
++      revise_get_field(env, lineClass, "hasTextChanged", "Z");
+   jfieldID haveSpeakersChangedField =
+-      get_field(env, lineClass, "haveSpeakersChanged", "Z");
++      revise_get_field(env, lineClass, "haveSpeakersChanged", "Z");
+   jfieldID lastTranscriptionLatencyMsField =
+-      get_field(env, lineClass, "lastTranscriptionLatencyMs", "I");
+-  jmethodID listConstructor = get_method(env, listClass, "<init>", "()V");
+-  jobject linesList = env->NewObject(listClass, listConstructor);
+-
+-  jmethodID lineConstructor = get_method(env, lineClass, "<init>", "()V");
++      revise_get_field(env, lineClass, "lastTranscriptionLatencyMs", "I");
++  jmethodID listConstructor = revise_get_method(env, listClass, "<init>", "()V");
++  jobject linesList = revise_jni_value(env, env->NewObject(listClass, listConstructor));
++
++  jmethodID lineConstructor = revise_get_method(env, lineClass, "<init>", "()V");
+   for (size_t i = 0; i < transcript->line_count; i++) {
++    ReviseLocalFrame lineFrame(env);
+     transcript_line_t *line = &transcript->lines[i];
+-    jobject jline = env->NewObject(lineClass, lineConstructor);
++    if (line->audio_data_count > static_cast<uint64_t>(std::numeric_limits<jsize>::max()) ||
++        (line->audio_data_count != 0 && line->audio_data == nullptr) ||
++        (line->speaker_span_count != 0 && line->speaker_spans == nullptr) ||
++        (line->word_count != 0 && line->words == nullptr)) {
++      return nullptr;
++    }
++    jobject jline = revise_jni_value(env, env->NewObject(lineClass, lineConstructor));
+     // Preserve the native null/non-null text distinction: a null line->text
+     // (e.g. skip_transcription, or a line with no text yet) must map to a null
+     // Java String, not "". The C API contract (see moonshine-c-api-test.cpp) is
+@@ -145,60 +240,61 @@
+     if (line->text != nullptr) {
+       std::string raw_text(line->text);
+       std::string sanitized_text = utf8::replace_invalid(raw_text);
+-      env->SetObjectField(jline, textField,
+-                          env->NewStringUTF(sanitized_text.c_str()));
+-    }
+-    jfloatArray audioDataArray = env->NewFloatArray(line->audio_data_count);
+-    env->SetFloatArrayRegion(audioDataArray, 0, line->audio_data_count,
+-                             line->audio_data);
+-    env->SetObjectField(jline, audioDataField, audioDataArray);
+-    env->SetFloatField(jline, startTimeField, line->start_time);
+-    env->SetFloatField(jline, durationField, line->duration);
+-    env->SetLongField(jline, idField, line->id);
+-    env->SetBooleanField(jline, isCompleteField, line->is_complete);
+-    env->SetBooleanField(jline, isUpdatedField, line->is_updated);
+-    env->SetBooleanField(jline, isNewField, line->is_new);
+-    env->SetBooleanField(jline, hasTextChangedField, line->has_text_changed);
+-    env->SetBooleanField(jline, haveSpeakersChangedField,
+-                         line->have_speakers_changed);
+-    env->SetIntField(jline, lastTranscriptionLatencyMsField,
+-                     static_cast<jint>(line->last_transcription_latency_ms));
++      jstring text = revise_jni_value(env, env->NewStringUTF(sanitized_text.c_str()));
++      REVISE_JNI_CALL(env->SetObjectField(jline, textField, text));
++    }
++    const jsize audioCount = static_cast<jsize>(line->audio_data_count);
++    jfloatArray audioDataArray = revise_jni_value(env, env->NewFloatArray(audioCount));
++    if (audioCount != 0) {
++      REVISE_JNI_CALL(env->SetFloatArrayRegion(audioDataArray, 0, audioCount, line->audio_data));
++    }
++    REVISE_JNI_CALL(env->SetObjectField(jline, audioDataField, audioDataArray));
++    REVISE_JNI_CALL(env->SetFloatField(jline, startTimeField, line->start_time));
++    REVISE_JNI_CALL(env->SetFloatField(jline, durationField, line->duration));
++    REVISE_JNI_CALL(env->SetLongField(jline, idField, line->id));
++    REVISE_JNI_CALL(env->SetBooleanField(jline, isCompleteField, line->is_complete));
++    REVISE_JNI_CALL(env->SetBooleanField(jline, isUpdatedField, line->is_updated));
++    REVISE_JNI_CALL(env->SetBooleanField(jline, isNewField, line->is_new));
++    REVISE_JNI_CALL(env->SetBooleanField(jline, hasTextChangedField, line->has_text_changed));
++    REVISE_JNI_CALL(env->SetBooleanField(jline, haveSpeakersChangedField, line->have_speakers_changed));
++    REVISE_JNI_CALL(env->SetIntField(jline, lastTranscriptionLatencyMsField,
++                                  static_cast<jint>(line->last_transcription_latency_ms)));
+ 
+     // Populate speaker spans if available
+     if (line->speaker_spans != nullptr && line->speaker_span_count > 0) {
+-      jclass spanClass = get_class(env, "ai/moonshine/voice/SpeakerSpan");
+-      jmethodID spanConstructor = get_method(env, spanClass, "<init>", "()V");
+-      jfieldID spanStartField = get_field(env, spanClass, "startTime", "F");
+-      jfieldID spanDurationField = get_field(env, spanClass, "duration", "F");
+-      jfieldID spanSpeakerIdField = get_field(env, spanClass, "speakerId", "J");
++      jclass spanClass = revise_get_class(env, "ai/moonshine/voice/SpeakerSpan");
++      jmethodID spanConstructor = revise_get_method(env, spanClass, "<init>", "()V");
++      jfieldID spanStartField = revise_get_field(env, spanClass, "startTime", "F");
++      jfieldID spanDurationField = revise_get_field(env, spanClass, "duration", "F");
++      jfieldID spanSpeakerIdField = revise_get_field(env, spanClass, "speakerId", "J");
+       jfieldID spanSpeakerIndexField =
+-          get_field(env, spanClass, "speakerIndex", "I");
+-      jfieldID spanStartCharField = get_field(env, spanClass, "startChar", "J");
+-      jfieldID spanEndCharField = get_field(env, spanClass, "endChar", "J");
+-
+-      jclass spanListClass = get_class(env, "java/util/ArrayList");
++          revise_get_field(env, spanClass, "speakerIndex", "I");
++      jfieldID spanStartCharField = revise_get_field(env, spanClass, "startChar", "J");
++      jfieldID spanEndCharField = revise_get_field(env, spanClass, "endChar", "J");
++
++      jclass spanListClass = revise_get_class(env, "java/util/ArrayList");
+       jmethodID spanListConstructor =
+-          get_method(env, spanListClass, "<init>", "()V");
++          revise_get_method(env, spanListClass, "<init>", "()V");
+       jmethodID spanListAdd =
+-          get_method(env, spanListClass, "add", "(Ljava/lang/Object;)Z");
+-      jobject spansList = env->NewObject(spanListClass, spanListConstructor);
++          revise_get_method(env, spanListClass, "add", "(Ljava/lang/Object;)Z");
++      jobject spansList = revise_jni_value(env, env->NewObject(spanListClass, spanListConstructor));
+ 
+       for (uint64_t j = 0; j < line->speaker_span_count; j++) {
++        ReviseLocalFrame spanFrame(env, 8);
+         const speaker_span_t *span = &line->speaker_spans[j];
+-        jobject jspan = env->NewObject(spanClass, spanConstructor);
+-        env->SetFloatField(jspan, spanStartField, span->start_time);
+-        env->SetFloatField(jspan, spanDurationField, span->duration);
+-        env->SetLongField(jspan, spanSpeakerIdField, span->speaker_id);
+-        env->SetIntField(jspan, spanSpeakerIndexField, span->speaker_index);
+-        env->SetLongField(jspan, spanStartCharField, span->start_char);
+-        env->SetLongField(jspan, spanEndCharField, span->end_char);
+-        env->CallBooleanMethod(spansList, spanListAdd, jspan);
+-        env->DeleteLocalRef(jspan);
++        jobject jspan = revise_jni_value(env, env->NewObject(spanClass, spanConstructor));
++        REVISE_JNI_CALL(env->SetFloatField(jspan, spanStartField, span->start_time));
++        REVISE_JNI_CALL(env->SetFloatField(jspan, spanDurationField, span->duration));
++        REVISE_JNI_CALL(env->SetLongField(jspan, spanSpeakerIdField, span->speaker_id));
++        REVISE_JNI_CALL(env->SetIntField(jspan, spanSpeakerIndexField, span->speaker_index));
++        REVISE_JNI_CALL(env->SetLongField(jspan, spanStartCharField, span->start_char));
++        REVISE_JNI_CALL(env->SetLongField(jspan, spanEndCharField, span->end_char));
++        REVISE_JNI_CALL(env->CallBooleanMethod(spansList, spanListAdd, jspan));
+       }
+ 
+       jfieldID spansField =
+-          get_field(env, lineClass, "speakerSpans", "Ljava/util/List;");
+-      env->SetObjectField(jline, spansField, spansList);
++          revise_get_field(env, lineClass, "speakerSpans", "Ljava/util/List;");
++      REVISE_JNI_CALL(env->SetObjectField(jline, spansField, spansList));
+       env->DeleteLocalRef(spansList);
+       env->DeleteLocalRef(spanClass);
+       env->DeleteLocalRef(spanListClass);
+@@ -206,60 +302,61 @@
+ 
+     // Populate word timestamps if available
+     if (line->words != nullptr && line->word_count > 0) {
+-      jclass wordClass = get_class(env, "ai/moonshine/voice/WordTiming");
+-      jmethodID wordConstructor = get_method(env, wordClass, "<init>", "()V");
++      jclass wordClass = revise_get_class(env, "ai/moonshine/voice/WordTiming");
++      jmethodID wordConstructor = revise_get_method(env, wordClass, "<init>", "()V");
+       jfieldID wordTextField =
+-          get_field(env, wordClass, "word", "Ljava/lang/String;");
+-      jfieldID wordStartField = get_field(env, wordClass, "start", "F");
+-      jfieldID wordEndField = get_field(env, wordClass, "end", "F");
+-      jfieldID wordConfField = get_field(env, wordClass, "confidence", "F");
+-
+-      jclass wordListClass = get_class(env, "java/util/ArrayList");
++          revise_get_field(env, wordClass, "word", "Ljava/lang/String;");
++      jfieldID wordStartField = revise_get_field(env, wordClass, "start", "F");
++      jfieldID wordEndField = revise_get_field(env, wordClass, "end", "F");
++      jfieldID wordConfField = revise_get_field(env, wordClass, "confidence", "F");
++
++      jclass wordListClass = revise_get_class(env, "java/util/ArrayList");
+       jmethodID wordListConstructor =
+-          get_method(env, wordListClass, "<init>", "()V");
++          revise_get_method(env, wordListClass, "<init>", "()V");
+       jmethodID wordListAdd =
+-          get_method(env, wordListClass, "add", "(Ljava/lang/Object;)Z");
+-      jobject wordsList = env->NewObject(wordListClass, wordListConstructor);
++          revise_get_method(env, wordListClass, "add", "(Ljava/lang/Object;)Z");
++      jobject wordsList = revise_jni_value(env, env->NewObject(wordListClass, wordListConstructor));
+ 
+       for (uint64_t j = 0; j < line->word_count; j++) {
++        ReviseLocalFrame wordFrame(env, 8);
+         const transcript_word_t *w = &line->words[j];
+-        jobject jword = env->NewObject(wordClass, wordConstructor);
++        jobject jword = revise_jni_value(env, env->NewObject(wordClass, wordConstructor));
+         std::string wtext(w->text ? w->text : "");
+         std::string wsanitized = utf8::replace_invalid(wtext);
+-        env->SetObjectField(jword, wordTextField,
+-                            env->NewStringUTF(wsanitized.c_str()));
+-        env->SetFloatField(jword, wordStartField, w->start);
+-        env->SetFloatField(jword, wordEndField, w->end);
+-        env->SetFloatField(jword, wordConfField, w->confidence);
+-        env->CallBooleanMethod(wordsList, wordListAdd, jword);
+-        env->DeleteLocalRef(jword);
++        jstring wordText = revise_jni_value(env, env->NewStringUTF(wsanitized.c_str()));
++        REVISE_JNI_CALL(env->SetObjectField(jword, wordTextField, wordText));
++        REVISE_JNI_CALL(env->SetFloatField(jword, wordStartField, w->start));
++        REVISE_JNI_CALL(env->SetFloatField(jword, wordEndField, w->end));
++        REVISE_JNI_CALL(env->SetFloatField(jword, wordConfField, w->confidence));
++        REVISE_JNI_CALL(env->CallBooleanMethod(wordsList, wordListAdd, jword));
+       }
+ 
+       jfieldID wordsField =
+-          get_field(env, lineClass, "words", "Ljava/util/List;");
+-      env->SetObjectField(jline, wordsField, wordsList);
++          revise_get_field(env, lineClass, "words", "Ljava/util/List;");
++      REVISE_JNI_CALL(env->SetObjectField(jline, wordsField, wordsList));
+       env->DeleteLocalRef(wordsList);
+       env->DeleteLocalRef(wordClass);
+       env->DeleteLocalRef(wordListClass);
+     }
+ 
+-    env->CallBooleanMethod(linesList, addMethod, jline);
+-    env->DeleteLocalRef(jline);
+-  }
+-  jclass transcriptClass = get_class(env, "ai/moonshine/voice/Transcript");
++    REVISE_JNI_CALL(env->CallBooleanMethod(linesList, addMethod, jline));
++  }
++  jclass transcriptClass = revise_get_class(env, "ai/moonshine/voice/Transcript");
+   jmethodID transcriptConstructor =
+-      get_method(env, transcriptClass, "<init>", "()V");
++      revise_get_method(env, transcriptClass, "<init>", "()V");
+   jfieldID linesField =
+-      get_field(env, transcriptClass, "lines", "Ljava/util/List;");
+-  jobject jtranscript = env->NewObject(transcriptClass, transcriptConstructor);
+-  env->SetObjectField(jtranscript, linesField, linesList);
++      revise_get_field(env, transcriptClass, "lines", "Ljava/util/List;");
++  jobject jtranscript = revise_jni_value(env, env->NewObject(transcriptClass, transcriptConstructor));
++  REVISE_JNI_CALL(env->SetObjectField(jtranscript, linesField, linesList));
+ 
+   env->DeleteLocalRef(listClass);
+   env->DeleteLocalRef(lineClass);
+   env->DeleteLocalRef(transcriptClass);
+ 
+-  return jtranscript;
+-}
++  return revise_jni_value(env, frame.keep(jtranscript));
++}
++
++#undef REVISE_JNI_CALL
+ 
+ static bool fill_moonshine_options(
+     JNIEnv *env, jobjectArray joptions, std::vector<moonshine_option_t> *out_c,
+@@ -355,33 +452,44 @@
+     JNIEnv *env, jobject /* this */, jstring path, jint model_arch,
+     jobjectArray joptions) {
+   try {
+-    jclass optionClass = get_class(env, "ai/moonshine/voice/TranscriberOption");
+-    jfieldID nameField =
+-        get_field(env, optionClass, "name", "Ljava/lang/String;");
+-    jfieldID valueField =
+-        get_field(env, optionClass, "value", "Ljava/lang/String;");
+-
++    ReviseLocalFrame frame(env);
++    std::vector<std::pair<std::string, std::string>> storage;
++    if (joptions != nullptr) {
++      jclass optionClass = revise_get_class(env, "ai/moonshine/voice/TranscriberOption");
++      jfieldID nameField = revise_get_field(env, optionClass, "name", "Ljava/lang/String;");
++      jfieldID valueField = revise_get_field(env, optionClass, "value", "Ljava/lang/String;");
++      const jsize count = env->GetArrayLength(joptions);
++      revise_check_jni(env);
++      if (count < 0) return MOONSHINE_ERROR_INVALID_ARGUMENT;
++      storage.reserve(static_cast<size_t>(count));
++      for (jsize i = 0; i < count; i++) {
++        ReviseLocalFrame optionFrame(env, 8);
++        jobject joption = env->GetObjectArrayElement(joptions, i);
++        revise_check_jni(env);
++        if (joption == nullptr) return MOONSHINE_ERROR_INVALID_ARGUMENT;
++        jstring jname = static_cast<jstring>(env->GetObjectField(joption, nameField));
++        revise_check_jni(env);
++        if (jname == nullptr) return MOONSHINE_ERROR_INVALID_ARGUMENT;
++        jstring jvalue = static_cast<jstring>(env->GetObjectField(joption, valueField));
++        revise_check_jni(env);
++        if (jvalue == nullptr) return MOONSHINE_ERROR_INVALID_ARGUMENT;
++        ReviseUtfChars name(env, jname);
++        ReviseUtfChars value(env, jvalue);
++        storage.emplace_back(name.get(), value.get());
++      }
++    }
++    // Construct pointers only after storage stops moving (including SSO strings).
+     std::vector<moonshine_option_t> coptions;
+-    if (joptions != nullptr) {
+-      for (int i = 0; i < env->GetArrayLength(joptions); i++) {
+-        jobject joption = env->GetObjectArrayElement(joptions, i);
+-        jstring jname = (jstring)env->GetObjectField(joption, nameField);
+-        jstring jvalue = (jstring)env->GetObjectField(joption, valueField);
+-        coptions.push_back({env->GetStringUTFChars(jname, nullptr),
+-                            env->GetStringUTFChars(jvalue, nullptr)});
+-      }
+-    }
+-    const char *path_str;
+-    if (path != nullptr) {
+-      path_str = env->GetStringUTFChars(path, nullptr);
+-    } else {
+-      path_str = nullptr;
+-    }
++    coptions.reserve(storage.size());
++    for (const auto &option : storage) {
++      coptions.push_back({option.first.c_str(), option.second.c_str()});
++    }
++    ReviseUtfChars pathChars(env, path);
+     return moonshine_load_transcriber_from_files(
+-        path_str, model_arch, coptions.data(), coptions.size(),
++        pathChars.get(), model_arch, coptions.data(), coptions.size(),
+         MOONSHINE_HEADER_VERSION);
+-  } catch (const std::exception &e) {
+-    ALOGE("moonshineLoadTranscriberFromFiles: %s\n", e.what());
++  } catch (...) {
++    ALOGE("moonshineLoadTranscriberFromFiles: native boundary failed");
+     return MOONSHINE_ERROR_UNKNOWN;
+   }
+ }
+@@ -688,6 +796,7 @@
+                                                       jint stream_handle,
+                                                       jint flags) {
+   try {
++    revise_check_jni(env);
+     struct transcript_t *transcript = nullptr;
+     ALOGD("moonshineTranscribeStream: start transcribe stream");
+     int transcription_error = moonshine_transcribe_stream(
+@@ -701,8 +810,8 @@
+     }
+     ALOGD("moonshineTranscribeStream: transcript=%p", (void *)transcript);
+     return c_transcript_to_jobject(env, transcript);
+-  } catch (const std::exception &e) {
+-    ALOGE("moonshineTranscribeStream: %s\n", e.what());
++  } catch (...) {
++    ALOGE("moonshineTranscribeStream: native boundary failed");
+     return nullptr;
+   }
+ }

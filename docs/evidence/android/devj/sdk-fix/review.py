@@ -69,6 +69,8 @@ def main():
     p.add_argument("--ndk", type=Path,
                    default=Path(os.environ["LOCALAPPDATA"]) / "Android/Sdk/ndk/28.2.13676358")
     p.add_argument("--cross-build", action="store_true")
+    p.add_argument("--jni-syntax-check", action="store_true",
+                   help="Compile-check the complete patched JNI translation unit for all three Android ABIs; no link/repack")
     a = p.parse_args()
     if sys.flags.optimize:
         p.error("Run without -O/PYTHONOPTIMIZE; preservation assertions must remain enabled")
@@ -77,9 +79,14 @@ def main():
     out = APPROVED / a.run_name
     out.mkdir()  # Never overwrite or delete an existing probe.
     results = {"scope": "REVIEW ONLY; NOT ADOPTED OR DEVICE-TESTED", "commands": [],
-               "source_commit": PINS["commit"], "inputs": {}, "outputs": {}}
+                "source_commit": PINS["commit"], "inputs": {}, "outputs": {}}
     try:
-        if a.cross_build:
+        for name in ["review.py", "inputs.json", "ndk-inputs.json", "jni_cleanup_test.cpp",
+                     "jni_required_path_test.cpp", "CheckedBoundaryTest.java", "StopLedgerFixture.java"]:
+            results["inputs"]["review-harness/" + name] = digest((HERE / name).read_bytes())
+        results["inputs"]["review-harness/check_boundary.py"] = digest(
+            (HERE.parent / "check_boundary.py").read_bytes())
+        if a.cross_build or a.jni_syntax_check:
             for rel, h in json.loads((HERE / "ndk-inputs.json").read_text()).items():
                 if digest((a.ndk / rel).read_bytes()) != h:
                     raise SystemExit("NDK dependency mismatch: " + rel)
@@ -111,6 +118,18 @@ def main():
         start = text.index('extern "C" JNIEXPORT int JNICALL\nJava_ai_moonshine_voice_JNI_moonshineAddAudioToStream')
         end = text.index('\nextern "C" JNIEXPORT', start + 1)
         (out / "streaming-add.inc").write_text(text[start:end])
+        guards_start = text.index('// Only the required file-loader')
+        guards_end = text.index('\nstatic bool fill_moonshine_options', guards_start)
+        (out / "required-converter.inc").write_text(text[guards_start:guards_end])
+        for name, output in [("moonshineLoadTranscriberFromFiles", "required-loader.inc"),
+                             ("moonshineTranscribeStream", "required-stream.inc")]:
+            start = text.index('Java_ai_moonshine_voice_JNI_' + name + '(')
+            start = text.rindex('extern "C" JNIEXPORT', 0, start)
+            end = text.index('\nextern "C" JNIEXPORT', start + 1)
+            # Loader is followed by shared memory-loader helpers, not another export.
+            if name == "moonshineLoadTranscriberFromFiles":
+                end = text.index('\n// Copies a jbyteArray', start)
+            (out / output).write_text(text[start:end])
         host_env = dict(os.environ)
         host_env["PATH"] = str(a.host_cxx.parent) + os.pathsep + host_env["PATH"]
         run([a.host_cxx, "--version"], out, "host-compiler", results, host_env)
@@ -120,6 +139,13 @@ def main():
              HERE / "jni_cleanup_test.cpp", "-o", out / "jni-cleanup-test.exe"],
             out, "host-jni-compile", results, host_env)
         print(run([out / "jni-cleanup-test.exe"], out, "host-jni-test", results, host_env))
+        run([a.host_cxx, "-std=c++20", "-Wall", "-Wextra", "-Werror", "-O2",
+             "-I" + str(a.jdk / "include"), "-I" + str(a.jdk / "include/win32"),
+             "-I" + str(source / "core"),
+             "-I" + str(source / "core/third-party/utf-8"), "-I" + str(out),
+             HERE / "jni_required_path_test.cpp", "-o", out / "jni-required-path-test.exe"],
+            out, "host-required-jni-compile", results, host_env)
+        print(run([out / "jni-required-path-test.exe"], out, "host-required-jni-test", results, host_env))
 
         # Reuse only test signature stubs; do not import bytecode caches into repo.
         spec = importlib.util.spec_from_file_location("boundary", HERE.parent / "check_boundary.py")
@@ -161,6 +187,17 @@ def main():
             out, "java-test-compile", results)
         print(run([a.jdk / "bin/java.exe", "-cp", classes, "ai.moonshine.voice.CheckedBoundaryTest"],
                   out, "java-test", results))
+        if a.jni_syntax_check:
+            llvm = a.ndk / "toolchains/llvm/prebuilt/windows-x86_64/bin"
+            for abi, target in {"arm64-v8a": "aarch64-linux-android26",
+                                "armeabi-v7a": "armv7a-linux-androideabi26",
+                                "x86_64": "x86_64-linux-android26"}.items():
+                run([llvm / "clang++.exe", "--target=" + target,
+                     "--sysroot=" + str(llvm.parent / "sysroot"), "-std=c++20",
+                     "-Wall", "-Wextra", "-Werror", "-fsyntax-only",
+                     "-I" + str(source / "core"),
+                     "-I" + str(source / "core/third-party/utf-8"), cpp],
+                    out, abi + "-jni-syntax", results)
         if not a.cross_build:
             return
 
@@ -218,7 +255,7 @@ def main():
                 out, abi + "-add-disassembly", results)
             entries["jni/" + abi + "/libmoonshine-jni.so"] = built.read_bytes()
             results["outputs"][abi + "/libmoonshine-jni.so"] = digest(built.read_bytes())
-        candidate = out / "moonshine-voice-0.1.5-revise-review-r1.aar"
+        candidate = out / "moonshine-voice-0.1.5-revise-review-required-path.aar"
         candidate.write_bytes(deterministic_zip(entries))
         results["outputs"][candidate.name] = digest(candidate.read_bytes())
         # Positive per-entry preservation proof; only four payload entries changed.
