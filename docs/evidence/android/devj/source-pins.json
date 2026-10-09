@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/moonshine-ai/moonshine",
+  "tag": "v0.1.5",
+  "commit": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+  "files": {
+    "language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java": "2f8e8f1545eb950790f5aa5c408f18b26b3908a17df7721954582b4b4b1c7e15",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/TranscriberOption.java": "e4b3c4a84254bbc3475b1721477d78eb155c001be5b4e1fc846cfd9c711fa780",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/Transcript.java": "ed9515d75874c86b5f527f922813e825eaea10cf6bd925a397592200bb01b833",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/TranscriptLine.java": "8536ea6a0d8b78eed8001835ab14755f86ba09c5902abce6d19a75f2e20ca133",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/TranscriptEvent.java": "b8580218fde007f0b4bfe1a781812b79d5be01adf792024e728f7aaec6c7335d",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/SpeakerSpan.java": "93485eab59933dc97430f5239cf6bf48e5efee8d1bd3402d8d86341cb3f11552",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/WordTiming.java": "a364d2134f5211cd05e8c5c90a1a9d4053cc94baf0dd408f235e93686050d139",
+    "core/transcriber.cpp": "b054d3aaaaf86dcc77304d9ad07ea6ea3c43c7e1402d169bc9165195fd275a95",
+    "core/transcriber.h": "0b442dd723cc5263acbf848e41b5412213d452b96cee15a5e01be4ce2c88268a",
+    "core/voice-activity-detector.cpp": "8fab332566ed5b69e279dd0d6ab82921d5024070a7bb9730e1d4a4b4e023118d",
+    "language-bindings/android/moonshine-jni/moonshine-jni.cpp": "5d21e752ecb54af057a1837a7180fe440ac7fbc0a9e59373021f42b8dc84ee8f",
+    "core/cpp-annote/src/cpp-annote-streaming.cpp": "89c3ae6e364c41703a9cda018e1febf1aa840a8490f9368a8e4bf76a68e236cd"
+  }
+}

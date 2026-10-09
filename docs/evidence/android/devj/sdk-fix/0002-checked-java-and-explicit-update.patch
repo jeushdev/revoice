@@ -1,0 +1,69 @@
+diff --git a/language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java b/language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java
+--- a/language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java
++++ b/language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java
+@@ -398,4 +398,5 @@
+   public void startStream(int streamHandle) {
+-    JNI.moonshineStartStream(this.transcriberHandle, streamHandle);
++    checkStreamStatus(JNI.moonshineStartStream(this.transcriberHandle,
++                                             streamHandle), "start stream");
+     // A restarted stream should not inherit audio counted towards the previous
+     // session's next update, nor the cost of a pass made in it.
+@@ -406,3 +407,4 @@
+   public void stopStream(int streamHandle) {
+-    JNI.moonshineStopStream(this.transcriberHandle, streamHandle);
++    checkStreamStatus(JNI.moonshineStopStream(this.transcriberHandle,
++                                            streamHandle), "stop stream");
+     // There may be some audio left in the stream, so we need to transcribe it
+@@ -413,5 +415,8 @@
+         this.transcriberHandle, streamHandle,
+         JNI.MOONSHINE_FLAG_FORCE_UPDATE | this.transcribeFlags);
++    if (transcript == null) {
++      throw new RuntimeException("Failed to transcribe stopped stream: " + streamHandle);
++    }
+     this.pendingSeconds.put(streamHandle, 0.0);
+     this.notifyFromTranscript(transcript, streamHandle);
+   }
+@@ -438,5 +443,8 @@
+   public void addAudioToStream(int streamHandle, float[] audioData,
+                                int sampleRate) {
+-    JNI.moonshineAddAudioToStream(this.transcriberHandle, streamHandle,
+-                                  audioData, sampleRate, this.transcribeFlags);
++    if (audioData == null || audioData.length == 0 || sampleRate <= 0) {
++      throw new IllegalArgumentException("Audio must be nonempty with a positive sample rate");
++    }
++    checkStreamStatus(JNI.moonshineAddAudioToStream(this.transcriberHandle, streamHandle,
++        audioData, sampleRate, this.transcribeFlags), "add audio to stream");
+     // The audio is safely in the stream either way; whether to look for new
+@@ -460,5 +468,32 @@
+     this.notifyFromTranscript(transcript, streamHandle);
+   }
+ 
++  private static void checkStreamStatus(int status, String operation) {
++    if (status != JNI.MOONSHINE_ERROR_NONE) {
++      throw new RuntimeException("Failed to " + operation + ": " + status);
++    }
++  }
++
++  /**
++   * Requests a pass over accepted audio, bypassing both update interval gates.
++   * Calls/listeners must be serialized by the caller. This neither stops the
++   * stream nor guarantees line completion or a full diarization drain.
++   */
++  public void updateStream(int streamHandle) {
++    long started = System.nanoTime();
++    Transcript transcript = JNI.moonshineTranscribeStream(
++        this.transcriberHandle, streamHandle,
++        JNI.MOONSHINE_FLAG_FORCE_UPDATE | this.transcribeFlags);
++    if (transcript == null) {
++      throw new RuntimeException("Failed to update stream: " + streamHandle);
++    }
++    this.pendingSeconds.put(streamHandle, 0.0);
++    this.lastPassSeconds.put(streamHandle, (System.nanoTime() - started) / 1e9);
++    this.notifyFromTranscript(transcript, streamHandle);
++  }
++
++  /** Requests a pass without changing stream lifetime; not a Pause operation. */
++  public void update() { this.updateStream(this.getDefaultStreamHandle()); }
++
+   /**
+    * Adds the audio just given to a stream to that stream's running total and

@@ -1,0 +1,28 @@
+{
+  "commit": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+  "files": {
+    "language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java": "2f8e8f1545eb950790f5aa5c408f18b26b3908a17df7721954582b4b4b1c7e15",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/TranscriberOption.java": "e4b3c4a84254bbc3475b1721477d78eb155c001be5b4e1fc846cfd9c711fa780",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/Transcript.java": "ed9515d75874c86b5f527f922813e825eaea10cf6bd925a397592200bb01b833",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/TranscriptLine.java": "8536ea6a0d8b78eed8001835ab14755f86ba09c5902abce6d19a75f2e20ca133",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/TranscriptEvent.java": "b8580218fde007f0b4bfe1a781812b79d5be01adf792024e728f7aaec6c7335d",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/SpeakerSpan.java": "93485eab59933dc97430f5239cf6bf48e5efee8d1bd3402d8d86341cb3f11552",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/WordTiming.java": "a364d2134f5211cd05e8c5c90a1a9d4053cc94baf0dd408f235e93686050d139",
+    "language-bindings/android/moonshine-jni/moonshine-jni.cpp": "5d21e752ecb54af057a1837a7180fe440ac7fbc0a9e59373021f42b8dc84ee8f",
+    "core/moonshine-c-api.h": "e5c9038c4987d87f40abd78f843bd6ab0bff96a5ffd1cc2557c5531b0cbab21f",
+    "language-bindings/android/moonshine-jni/CMakeLists.txt": "273496ab1d18caa933b3f9ea68b01fd101ecaa7692029aa8dde72d8a5cc5a177",
+    "core/CMakeLists.txt": "e27a1a1c0407b52109e10d25d51eb062f1414337c8bb009e28bb8e08a52ae338",
+    "LICENSE": "fa7d1174dd8af6a7cd280be20b80d10095ed4c19b5b20b61a7715c3ad790dc5f",
+    "core/third-party/utf-8/utf8.h": "a6497f1d022c300e5681f23d5a3b50ebf6dc8928ac48651fc63f0997c10850f5",
+    "core/third-party/utf-8/utf8/checked.h": "5d3a83927f2a13c9e74c9e10b9fed10de3983f2a55553af99cd592c609cd5a72",
+    "core/third-party/utf-8/utf8/core.h": "cf422d2e4750df58172de2a78d3e71d442d01482eb0df65f674d89ed8fe94610",
+    "core/third-party/utf-8/utf8/cpp11.h": "5991c5d6ac7f9a49dd330ce91205bc7e7078c15b52530390f536c0ae24cb95b1",
+    "core/third-party/utf-8/utf8/cpp17.h": "17eb5080ea4e4c3f95cee913161857ca922ebeb2ae3ed0809e30c5ba7de27b16",
+    "core/third-party/utf-8/utf8/cpp20.h": "f5ce243a0637c6331b9b7624c52386a9856714fd04787629bffb34a8fa3f87d3",
+    "core/third-party/utf-8/utf8/unchecked.h": "28ec924fef9a5bb06e027633f1d1d5df6e4181545e922815777fa5b18476f59c"
+  },
+  "artifacts": {
+    "moonshine-voice-0.1.5.aar": "ee2d95c21150683c743db8f3aef66281fd5408bcefc94be3ca1d2545ada1f571",
+    "moonshine-voice-0.1.5-sources.jar": "b2a5a53dff132acdddf4f481f8a7f75b49168637f9a4efef8e49faf091ccba63"
+  }
+}

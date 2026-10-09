@@ -1,0 +1,46 @@
+diff --git a/language-bindings/android/moonshine-jni/moonshine-jni.cpp b/language-bindings/android/moonshine-jni/moonshine-jni.cpp
+--- a/language-bindings/android/moonshine-jni/moonshine-jni.cpp
++++ b/language-bindings/android/moonshine-jni/moonshine-jni.cpp
+@@ -646,14 +646,37 @@
+   try {
+-    if (audio_data == nullptr) {
++    // Preserve any pending Java exception, including an allocation failure.
++    if (env->ExceptionCheck()) {
++      return MOONSHINE_ERROR_UNKNOWN;
++    }
++    if (audio_data == nullptr || sample_rate <= 0) {
+       return MOONSHINE_ERROR_INVALID_ARGUMENT;
+     }
+-    float *audio_data_ptr = env->GetFloatArrayElements(audio_data, nullptr);
+-    size_t audio_data_size = env->GetArrayLength(audio_data);
++    // Validate length before acquiring storage. Empty audio is not a flush API.
++    const jsize audio_data_size = env->GetArrayLength(audio_data);
++    if (env->ExceptionCheck()) {
++      return MOONSHINE_ERROR_UNKNOWN;
++    }
++    if (audio_data_size <= 0) {
++      return MOONSHINE_ERROR_INVALID_ARGUMENT;
++    }
++    auto release_audio = [env, audio_data](jfloat *samples) {
++      env->ReleaseFloatArrayElements(audio_data, samples, JNI_ABORT);
++    };
++    // unique_ptr construction cannot allocate; release also runs on C++ unwind.
++    std::unique_ptr<jfloat, decltype(release_audio)> audio_data_ptr(
++        env->GetFloatArrayElements(audio_data, nullptr), release_audio);
++    if (!audio_data_ptr || env->ExceptionCheck()) {
++      return MOONSHINE_ERROR_UNKNOWN;
++    }
+     return moonshine_transcribe_add_audio_to_stream(
+-        transcriber_handle, stream_handle, audio_data_ptr, audio_data_size,
+-        sample_rate, flags);
++        transcriber_handle, stream_handle, audio_data_ptr.get(),
++        static_cast<size_t>(audio_data_size), sample_rate, flags);
+   } catch (const std::exception &e) {
+     ALOGE("moonshineAddAudioToStream: %s\n", e.what());
+     return MOONSHINE_ERROR_UNKNOWN;
++  } catch (...) {
++    // No C++ exception may escape a JNI boundary, including non-std exceptions.
++    ALOGE("moonshineAddAudioToStream: unknown native exception\n");
++    return MOONSHINE_ERROR_UNKNOWN;
+   }
+ }
