@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
 import 'name_rules.dart';
+import 'speaker_suggestions.dart';
 
 class Segment {
   Segment({
@@ -79,6 +80,52 @@ class SessionController extends ChangeNotifier {
   /// Whether post-Stop speaker suggestions are shown (the original labels are always kept).
   bool useSuggestions = true;
 
+  /// True when Stop found the voices were not separated and suggested labels from turn-taking
+  /// and names (see speaker_suggestions.dart).
+  bool get hasSuggestions => _suggestionsApplied;
+  bool _suggestionsApplied = false;
+  Map<int, SpeakerName> _namesBeforeSuggestions = {};
+  Map<int, SpeakerName> _namesSuggested = {};
+
+  /// Runs at Stop, before any CRM card is made. Original [Segment.speakerId] values are untouched.
+  void _applySuggestions() {
+    final result = suggestSpeakers([
+      for (final s in finals) SuggestionLine(s.id, s.text, speakerOf(s)),
+    ]);
+    if (result == null) return;
+    for (final s in finals) {
+      s.suggestedSpeakerId = result.speakers[s.id];
+    }
+    _namesBeforeSuggestions = Map.of(speakerNames);
+    _namesSuggested = {
+      for (final e in speakerNames.entries)
+        if (e.value.source == NameSource.manual) e.key: e.value, // the user's own names always stay
+    };
+    result.names.forEach((id, name) {
+      _namesSuggested.putIfAbsent(id, () => SpeakerName(name, NameSource.auto));
+    });
+    speakerNames
+      ..clear()
+      ..addAll(_namesSuggested);
+    useSuggestions = true;
+    _suggestionsApplied = true;
+  }
+
+  /// Switch between the suggested labels/names and the original ones.
+  void setUseSuggestions(bool on) {
+    if (!_suggestionsApplied) return;
+    useSuggestions = on;
+    final manual = {
+      for (final e in speakerNames.entries)
+        if (e.value.source == NameSource.manual) e.key: e.value,
+    };
+    speakerNames
+      ..clear()
+      ..addAll(on ? _namesSuggested : _namesBeforeSuggestions)
+      ..addAll(manual);
+    notifyListeners();
+  }
+
   /// Speakers with at least one final line, excluding unknown (0).
   List<int> get knownSpeakers => {
     for (final s in finals)
@@ -142,6 +189,8 @@ class SessionController extends ChangeNotifier {
     _segments.clear();
     speakerNames.clear();
     liveSpeakerOverride = null;
+    _suggestionsApplied = false;
+    useSuggestions = true;
     _pendingCall = null;
     interrupted = false;
     errorMessage = null;
@@ -160,6 +209,7 @@ class SessionController extends ChangeNotifier {
     }
     // Unconfirmed partials are excluded from the transcript and CRM.
     _segments.removeWhere((_, s) => !s.isFinal);
+    _applySuggestions(); // before CRM cards are generated, so cards use the suggested labels
     notifyListeners();
   }
 

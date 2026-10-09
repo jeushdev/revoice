@@ -59,6 +59,7 @@ class TranscriptScreen extends StatelessWidget {
                   ),
                   actions: [SizedBox.shrink()],
                 ),
+              if (session.hasSuggestions) _SuggestionBanner(session: session),
               _CrmStrip(session: session, crm: crm),
               Expanded(
                 child: lines.isEmpty
@@ -116,6 +117,29 @@ class TranscriptScreen extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Shown when Stop could not rely on the audio to tell speakers apart and suggested labels.
+class _SuggestionBanner extends StatelessWidget {
+  const _SuggestionBanner({required this.session});
+
+  final SessionController session;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: SwitchListTile(
+        value: session.useSuggestions,
+        onChanged: session.setUseSuggestions,
+        title: const Text('Suggested speaker labels'),
+        subtitle: const Text(
+          'The audio could not tell the voices apart, so these labels come from '
+          'turn-taking and names. The original labels are kept. Tap a line to fix one.',
+        ),
+      ),
     );
   }
 }

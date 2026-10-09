@@ -19,7 +19,7 @@ class _Engine implements CaptionEngine {
   @override
   Future<void> resume() async {}
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async => controller.add(const StateEvent(EngineState.stopped, null));
   @override
   Future<String> generateCrm({required String prompt, int maxTokens = 512}) async => '';
   @override
@@ -98,5 +98,46 @@ void main() {
     session.setLineSpeaker('s-0002', 2);
     expect(session.finals.map(session.speakerOf).toList(), [1, 2]);
     expect(session.knownSpeakers, [1, 2]);
+  });
+
+  test('Stop suggests labels when diarization collapsed; originals kept; toggle restores them', () async {
+    const talk = [
+      "Hi, I'm David.",
+      "Hi David, my name's John. Nice to meet you.",
+      'Nice to meet you too. What do you do?',
+      'I work in logistics.',
+      'That sounds busy. How big is the team?',
+      'About twelve people.',
+    ];
+    for (var i = 0; i < talk.length; i++) {
+      engine.caption('s-000${i + 1}', talk[i], 1); // Moonshine says speaker 1 for everything
+      await pump();
+    }
+    await session.stop();
+
+    expect(session.hasSuggestions, isTrue);
+    expect(session.finals.map(session.speakerOf).toSet(), {1, 2});
+    expect(session.finals.every((s) => s.speakerId == 1), isTrue, reason: 'originals untouched');
+    expect(session.displayName(1), 'David');
+    expect(session.displayName(2), 'John');
+
+    session.setUseSuggestions(false);
+    expect(session.finals.map(session.speakerOf).toSet(), {1});
+    expect(session.knownSpeakers, [1]);
+
+    session.setUseSuggestions(true);
+    expect(session.knownSpeakers, [1, 2]);
+  });
+
+  test('a manual rename survives toggling suggestions', () async {
+    for (var i = 0; i < 4; i++) {
+      engine.caption('s-000${i + 1}', ['Hello there.', 'Hi, how are you?', 'Fine, thanks.', 'Good to hear.'][i], 1);
+      await pump();
+    }
+    await session.stop();
+    session.rename(2, 'Priya');
+    session.setUseSuggestions(false);
+    session.setUseSuggestions(true);
+    expect(session.displayName(2), 'Priya');
   });
 }

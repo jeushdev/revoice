@@ -97,12 +97,22 @@ enum CrmEvidence {
         "all", "much", "very", "too", "meet", "morning", "afternoon", "evening", "night", "day", "have",
     ]
 
-    /// True if `text` plausibly names something to DO: after removing greetings, thanks and
-    /// filler there must be at least two meaningful words left (a lone name such as "David" or a
-    /// lone day such as "Friday" is not an action).
+    /// Time words: "next week" says WHEN, not WHAT to do.
+    private static let timeWords: Set<String> = [
+        "next", "last", "this", "week", "weeks", "month", "months", "year", "years", "tomorrow", "today",
+        "tonight", "yesterday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+        "weekend", "later", "soon", "morning", "afternoon", "evening", "noon", "eod", "asap", "now", "then",
+        "time", "again", "after", "before", "by", "until", "end", "early", "late",
+    ]
+
+    /// True if `text` plausibly names something to DO: after removing greetings, thanks, filler
+    /// and time words there must be at least two meaningful words left (a lone name such as
+    /// "David", or "next week", is not an action; "send the contract on Monday" is).
     static func isConcreteAction(_ text: String) -> Bool {
         let words = normalize(text).split(separator: " ").map(String.init)
-        let meaningful = words.filter { !pleasantries.contains($0) && !stopwords.contains($0) }
+        let meaningful = words.filter {
+            !pleasantries.contains($0) && !stopwords.contains($0) && !timeWords.contains($0)
+        }
         return Set(meaningful).count >= 2
     }
 

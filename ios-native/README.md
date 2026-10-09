@@ -122,6 +122,39 @@ Future<String> generate({required String prompt, int maxTokens = 512, String? sy
 }
 ```
 
+## Speaker handling (what exists and why)
+
+1. **Faster diarization.** Moonshine's clustering threshold is compiled in (no option). We set `diarization_cluster_cadence=1.0`
+   and `diarization_analyze_cadence=0.5` so speakers appear sooner (two-voice test: Unknown lines 2 -> 1, labels followed the real
+   alternation). If live captions lag on a phone, put them back to 2.0 / 0 in `ReviseEngine.loadSTT`.
+2. **Suggested labels at Stop (`lib/session/speaker_suggestions.dart`).** Only when Moonshine gave at most one speaker for the whole
+   conversation. Turn-taking cues (question -> answer by the other person, "Sure/Thanks/Hi/That sounds..." replies) plus names ("I'm X",
+   "my name's X", "Thanks, X" = said to X). Shown with an on/off switch on the transcript, originals kept, applied inside
+   `SessionController.stop()` so CRM cards use it. It is a 2-person heuristic, not a model.
+   **An LLM was tried and rejected:** Qwen 2.5 1.5B scored 5/14 (just alternates A/B) and 7/14 on per-line change flags; asked
+   "same or different person?" for adjacent lines it answered "different" every time. A bigger model (3B, only for the 6 GB iPhone 14 Pro Max)
+   might work but was not tested; `CaptionEngine.generate()` is in place if you want to try.
+3. **Manual safety net.** Live screen "Switch speaker" (forces the speaker of new lines, "Auto" returns to Moonshine) and tap a transcript
+   line to choose its speaker. Stored in `Segment.manualSpeakerId`; `SessionController.speakerOf(segment)` decides the label
+   (manual > suggested > Moonshine) and everything (UI, name rules, CRM) uses it.
+4. **Name rule** also matches "my name's X", "name's X" and curly apostrophes.
+5. **CRM `follow_up`** must be a concrete action: prompt rule + code guard in `CrmEvidence.isConcreteAction` (greetings, thanks, goodbyes
+   and time-only phrases like "next week" become null).
+
+### Dart changes made on zrs/ios (for Jairus)
+
+- `lib/engine/caption_engine.dart`, `platform_caption_engine.dart`, `mock_caption_engine.dart`: new `generate({prompt, maxTokens, system, jsonGrammar})`
+  (mock throws model_missing).
+- `lib/session/session_controller.dart`: `Segment.manualSpeakerId` / `suggestedSpeakerId`; `speakerOf()`, `knownSpeakers` now use it;
+  `switchSpeaker()`, `useAutoSpeaker()`, `setLineSpeaker()`, `liveSpeakerOverride`, `currentSpeaker`; `_applySuggestions()` called from `stop()`;
+  `setUseSuggestions()`, `hasSuggestions`; name rules use `speakerOf(seg)`.
+- `lib/session/speaker_suggestions.dart` (new), `lib/session/name_rules.dart` (self-intro regex).
+- `lib/crm/crm_controller.dart` (one line: lines filtered by `session.speakerOf`), `lib/ui/crm_screen.dart` (one line), `lib/ui/live_screen.dart`
+  (Switch speaker row, chip uses `speakerOf`), `lib/ui/transcript_screen.dart` (tap a line, suggestion banner), `lib/ui/speaker_chip.dart`
+  (`showLineSpeakerPicker`).
+- Tests: `test/manual_speaker_test.dart`, `test/speaker_suggestions_test.dart`, `test/name_rules_test.dart` (extended).
+- Android: `generate` is a new channel method; Dart treats model_missing / MissingPlugin as "skip".
+
 ## Moonshine SDK gotchas found while testing (0.1.5)
 
 - **`MicTranscriber` crashes on release with speaker ID on.** Its `close()` closes the stream, then `Stream.deinit` closes it
