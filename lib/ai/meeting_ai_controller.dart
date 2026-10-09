@@ -217,7 +217,7 @@ class MeetingAiController extends ChangeNotifier {
       task: summaryTask(),
       grammar: summaryGrammar(input.ids),
       maxTokens: 450,
-      parse: (raw) => parseSummary(raw, input.ids, turnText: input.turnText),
+      parse: (raw) => parseSummary(raw, input.ids, turnText: input.turnText, knownText: _knownText(input)),
     );
     summary = MeetingSummary(bullets);
     summaryStale = false;
@@ -259,7 +259,7 @@ class MeetingAiController extends ChangeNotifier {
         grammar: answerGrammar(input.ids),
         maxTokens: 220,
         stream: true,
-        parse: (raw) => parseAnswer(q, raw, input.ids, turnText: input.turnText),
+        parse: (raw) => parseAnswer(q, raw, input.ids, turnText: input.turnText, knownText: _knownText(input)),
       );
       timingsMs['answer'] = watch.elapsedMilliseconds;
       answers.add(result);
@@ -377,6 +377,10 @@ class MeetingAiController extends ChangeNotifier {
     final ordered = {for (final id in texts.keys.toList().reversed) id: texts[id]!};
     return (text: lines.reversed.join('\n'), ids: ids, turnText: ordered);
   }
+
+  /// Everything a claim may name: the transcript words and the speaker names.
+  String _knownText(({String text, Set<String> ids, Map<String, String> turnText}) input) =>
+      '${input.text} ${session.speakerNames.values.map((n) => n.name).join(' ')}';
 
   /// One grammar-constrained call; retries once when the output does not parse.
   Future<T> _askModel<T>({

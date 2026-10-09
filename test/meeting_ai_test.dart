@@ -207,6 +207,37 @@ void main() {
     });
   });
 
+  group('invented names', () {
+    test('a capitalised word missing from the transcript marks the claim invented', () {
+      const known = 'the launch is on the twelfth. Carlo prints them. Maria Jun';
+      expect(inventsName('Maria confirms the launch is December 12th', known), isTrue);
+      expect(inventsName('Carlo prints the posters', known), isFalse);
+      expect(inventsName("Maria's launch is on the twelfth", known), isFalse);
+      expect(inventsName('Jun asks about Manila', known), isTrue);
+    });
+
+    test('such a bullet or answer is dropped', () {
+      const turns = {'s-1': 'the launch is on the twelfth'};
+      expect(
+        () => parseSummary(
+          '{"bullets":[{"text":"The launch is in December","kind":"topic","sources":["s-1"]}]}',
+          {'s-1'},
+          turnText: turns,
+          knownText: 'the launch is on the twelfth',
+        ),
+        throwsFormatException,
+      );
+      final a = parseAnswer(
+        'When is the launch?',
+        '{"answer": "The launch is on December twelfth.", "supported": true, "sources": ["s-1"]}',
+        {'s-1'},
+        turnText: turns,
+        knownText: 'the launch is on the twelfth',
+      );
+      expect(a.supported, isFalse);
+    });
+  });
+
   group('summary parsing', () {
     final ids = {'s-0001', 's-0002', 's-0003'};
 

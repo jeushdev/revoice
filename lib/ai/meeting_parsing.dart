@@ -178,12 +178,31 @@ List<String> findEvidence(String claim, Map<String, String> turnText) {
   return [for (final s in top.take(2)) s.$1];
 }
 
+/// True when [claim] names something (a capitalised word that is not the first word, for example
+/// a month, a person or a place) that appears nowhere in [knownText]. The small model sometimes
+/// adds such details ("December 12th" for "the twelfth"); a claim with an invented name is dropped.
+bool inventsName(String claim, String knownText) {
+  final known = knownText.toLowerCase();
+  final words = claim.split(RegExp(r'\s+'));
+  for (var i = 1; i < words.length; i++) {
+    final w = words[i].replaceAll(RegExp(r"^[^A-Za-z]+|[^A-Za-z]+$|'s$"), '');
+    if (w.length < 3 || w[0] != w[0].toUpperCase() || w[0] == w[0].toLowerCase()) continue;
+    if (!known.contains(w.toLowerCase())) return true;
+  }
+  return false;
+}
+
 /// Keeps at most 5 bullets; drops any bullet with no text, an unknown kind, or no valid citation.
 /// Throws [FormatException] when nothing usable is left.
 ///
 /// With [turnText] (id to turn text), citations are recomputed from the words of each bullet; the
 /// model's own `sources` are then only used to decide nothing. Without it they are validated.
-List<SummaryBullet> parseSummary(String raw, Set<String> validIds, {Map<String, String>? turnText}) {
+List<SummaryBullet> parseSummary(
+  String raw,
+  Set<String> validIds, {
+  Map<String, String>? turnText,
+  String? knownText,
+}) {
   final list = _decodeObject(raw)['bullets'];
   if (list is! List) throw const FormatException('bullets missing');
   final bullets = <SummaryBullet>[];
@@ -196,6 +215,7 @@ List<SummaryBullet> parseSummary(String raw, Set<String> validIds, {Map<String, 
         ? modelSources
         : findEvidence('$text ${_shortValue(item['due']) ?? ''}', turnText);
     if (text == null || kind == null || sources.isEmpty) continue; // uncited bullets are dropped
+    if (knownText != null && inventsName(text, knownText)) continue; // invented details are dropped
     bullets.add(
       SummaryBullet(
         text: text,
@@ -222,6 +242,7 @@ MeetingAnswer parseAnswer(
   String raw,
   Set<String> validIds, {
   Map<String, String>? turnText,
+  String? knownText,
 }) {
   MeetingAnswer unsupported() =>
       MeetingAnswer(question: question, answer: notMentioned, sources: const [], supported: false);
@@ -233,6 +254,7 @@ MeetingAnswer parseAnswer(
     sources = findEvidence(short ? '$question $answer' : answer, turnText);
   }
   if (json['supported'] != true || answer == null || sources.isEmpty) return unsupported();
+  if (knownText != null && inventsName(answer, '$knownText $question')) return unsupported();
   if (answer.toLowerCase().startsWith('not mentioned')) return unsupported();
   return MeetingAnswer(
     question: question,
