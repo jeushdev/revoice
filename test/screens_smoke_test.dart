@@ -35,7 +35,7 @@ void main() {
     final stopped = session.stop();
     await tester.pump(const Duration(milliseconds: 10));
     await stopped;
-    final generated = crm.generateMissing();
+    final generated = crm.generateMissing(force: true);
     for (var i = 0; i < 20; i++) {
       await tester.pump(const Duration(milliseconds: 10));
     }

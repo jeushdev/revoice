@@ -57,7 +57,7 @@ void main() {
   test('CRM cards generate with evidence; empty fields stay empty', () async {
     final session = await recordFullMeeting(MockScenario.meeting);
     final crm = CrmController(session.engine, session);
-    await crm.generateMissing();
+    await crm.generateMissing(force: true);
     expect(crm.cards.length, 4);
     expect(crm.cards.values.every((c) => c.status == CrmStatus.done), isTrue);
     final sam = crm.cards[3]!;
@@ -76,7 +76,7 @@ void main() {
     () async {
       final session = await recordFullMeeting(MockScenario.crmFailure);
       final crm = CrmController(session.engine, session);
-      await crm.generateMissing();
+      await crm.generateMissing(force: true);
       expect(crm.cards[3]!.status, CrmStatus.failed);
       crm.cards[1]!
         ..role = 'CEO'
@@ -95,7 +95,7 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 50));
     await session.stop();
     final crm = CrmController(session.engine, session);
-    await crm.generateMissing();
+    await crm.generateMissing(force: true);
     expect(session.finals, isEmpty);
     expect(crm.cards, isEmpty);
   });

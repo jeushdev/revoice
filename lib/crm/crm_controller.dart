@@ -14,6 +14,11 @@ class CrmController extends ChangeNotifier {
   final CaptionEngine engine;
   final SessionController session;
 
+  /// CRM cards are no longer a product feature: nothing generates them after Stop unless this is
+  /// turned on (the code is kept so it can come back). Explicit `generateMissing(force: true)`
+  /// and [retryFailed] still work.
+  static bool autoGenerate = false;
+
   /// Target input budget for one speaker (~4 chars per token).
   static const maxInputTokens = 1500;
 
@@ -25,7 +30,8 @@ class CrmController extends ChangeNotifier {
 
   /// Generates cards for named speakers that do not have one yet. Also runs
   /// when a speaker is named on the stopped transcript.
-  Future<void> generateMissing() {
+  Future<void> generateMissing({bool force = false}) {
+    if (!autoGenerate && !force) return Future.value();
     for (final id in namedSpeakers) {
       cards.putIfAbsent(id, () => CrmCard(speakerId: id));
     }
@@ -57,7 +63,8 @@ class CrmController extends ChangeNotifier {
   }
 
   void _onSessionChanged() {
-    if (session.state == EngineState.stopped &&
+    if (autoGenerate &&
+        session.state == EngineState.stopped &&
         namedSpeakers.any((id) => !cards.containsKey(id))) {
       generateMissing();
     }
