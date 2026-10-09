@@ -157,6 +157,56 @@ void main() {
     });
   });
 
+  group('rules before the model', () {
+    test('fillers are removed by rule, commas stuck to them too', () {
+      expect(stripFillers('Sure, so um, tell me about it'), 'Sure, so tell me about it');
+      expect(stripFillers('mostly Facebook, and uh some by text'), 'mostly Facebook, and some by text');
+      expect(stripFillers('Um, hello. Umbrella and uhm sure'), 'hello. Umbrella and sure');
+    });
+
+    test('a pause between an unfinished fragment and a new sentence becomes "..."', () {
+      final turn = mergeFragments([
+        line('a', 1, 'Honestly...', 0, 900),
+        line('b', 1, 'Is the paperwork', 1200, 2400),
+        line('c', 1, 'We track all our orders in a notebook.', 2800, 5200),
+        line('d', 1, 'And things get lost.', 5600, 6800),
+      ]).single;
+      expect(turn.hintedText, 'Honestly... Is the paperwork... We track all our orders in a notebook. And things get lost.');
+      expect(passesWordGuard(turn.rawText, turn.hintedText), isTrue); // only punctuation differs
+      final cont = mergeFragments([line('a', 1, 'About forty', 0, 900), line('b', 1, 'and some by text', 1200, 2000)]).single;
+      expect(cont.hintedText, 'About forty and some by text'); // continuations are not cut
+    });
+
+    test('evidence is the turn that shares the claim\'s words; invented claims find none', () {
+      const turns = {
+        's-1': 'We track all our orders in a notebook.',
+        's-2': 'I will send you a demo by next Friday.',
+      };
+      expect(findEvidence('Jun sends a demo next Friday', turns), ['s-2']);
+      expect(findEvidence('The office is in Manila', turns), isEmpty);
+    });
+
+    test('an invented answer is unsupported even if the model cites a real id', () {
+      const turns = {'s-1': 'We track all our orders in a notebook.'};
+      final a = parseAnswer(
+        'What is the address?',
+        '{"answer": "Her address is 12 Mango Street.", "supported": true, "sources": ["s-1"]}',
+        {'s-1'},
+        turnText: turns,
+      );
+      expect(a.supported, isFalse);
+      expect(a.answer, notMentioned);
+      final yes = parseAnswer(
+        'Do they use a notebook?',
+        '{"answer": "Yes.", "supported": true, "sources": []}',
+        {'s-1'},
+        turnText: turns,
+      );
+      expect(yes.supported, isTrue); // a short answer uses the question words
+      expect(yes.sources, ['s-1']);
+    });
+  });
+
   group('summary parsing', () {
     final ids = {'s-0001', 's-0002', 's-0003'};
 
@@ -281,7 +331,7 @@ void main() {
             return '{"bullets": ['
                 '{"text": "Orders are tracked in a notebook.", "kind": "topic", "who": null, "due": null, "sources": ["s-0001"]},'
                 '{"text": "Invented.", "kind": "decision", "who": null, "due": null, "sources": ["s-0777"]},'
-                '{"text": "Speaker 2 will look for a tool.", "kind": "action", "who": "Speaker 2", "due": null, "sources": ["s-0005"]}]}';
+                '{"text": "Speaker 2 says that sounds painful.", "kind": "action", "who": "Speaker 2", "due": "[s-0001]", "sources": ["s-0001"]}]}';
           }
           return '{"questions": ["Who looks for a tool?", "What goes wrong?", "How are orders tracked?"]}';
         },
@@ -292,6 +342,10 @@ void main() {
       expect(ai.state, MeetingAiState.done);
       expect(ai.summary!.bullets, hasLength(2));
       expect(ai.summary!.bullets.every((b) => b.sources.isNotEmpty), isTrue);
+      // Citations come from the words, not from what the model claimed (it said s-0001 for both).
+      expect(ai.summary!.bullets.first.sources, ['s-0001']); // notebook turn
+      expect(ai.summary!.bullets.last.sources, ['s-0005']); // "That sounds painful."
+      expect(ai.summary!.bullets.last.due, isNull); // "[s-0001]" is not a time
       expect(ai.suggestedQuestions, hasLength(3));
       // The transcript goes first and is identical for summary and suggestions (prompt cache).
       final prefix = engine.generateCalls.map((p) => p.substring(0, p.indexOf('</transcript>'))).toSet();
@@ -383,7 +437,7 @@ void main() {
     test('summary becomes stale after an edit; polishing again only redoes changed turns', () async {
       final engine = engineWith(
         gen: (p, g) => (g as String).contains('bullets')
-            ? '{"bullets":[{"text":"A","kind":"topic","who":null,"due":null,"sources":["s-0001"]}]}'
+            ? '{"bullets":[{"text":"Better way to track orders","kind":"topic","who":null,"due":null,"sources":["s-0001"]}]}'
             : '{"questions":["Q1?","Q2?","Q3?"]}',
         clean: (t) => '$t.',
       );

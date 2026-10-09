@@ -54,9 +54,9 @@ const meetingSystem =
 String transcriptBlock(String transcript) => '<transcript>\n$transcript\n</transcript>\n\n';
 
 String summaryTask() => '''
-Task: summarize this meeting in 3 to 5 bullets covering the main topics, the decisions made and the action items.
-- kind is "topic", "decision" or "action". Use "action" only when someone commits to do something.
-- For an action, set who (the person) and due (the time as spoken); otherwise use null.
+Task: summarize this meeting in 3 to 5 bullets covering the main topics, the decisions made and the action items. Keep each bullet under 20 words.
+- kind is "topic", "decision" (people agreed or chose something) or "action" (someone commits to do something).
+- For an action, set who (the person) and due (the time as spoken, or null).
 - sources lists the [ids] of the transcript lines that support the bullet.
 Reply with JSON only.''';
 
@@ -89,8 +89,10 @@ String _gbnfEscape(String s) => s.replaceAll(r'\', r'\\').replaceAll('"', r'\"')
 String summaryGrammar(Iterable<String> ids) =>
     '''
 root ::= "{\\"bullets\\": [" bullet ", " bullet ", " bullet (", " bullet){0,2} "]}"
-bullet ::= "{\\"text\\": " string ", \\"kind\\": " kind ", \\"who\\": " nullable-string ", \\"due\\": " nullable-string ", \\"sources\\": " ids "}"
-kind ::= "\\"topic\\"" | "\\"decision\\"" | "\\"action\\""
+bullet ::= note | action
+note ::= "{\\"text\\": " string ", \\"kind\\": " notekind ", \\"sources\\": " ids "}"
+action ::= "{\\"text\\": " string ", \\"kind\\": \\"action\\", \\"who\\": " nullable-string ", \\"due\\": " nullable-string ", \\"sources\\": " ids "}"
+notekind ::= "\\"topic\\"" | "\\"decision\\""
 ids ::= "[" id (", " id){0,3} "]"
 id ::= ${_idRule(ids)}
 $_stringRule
@@ -138,9 +140,50 @@ String? _optionalText(Object? v) {
   return t.isEmpty || t.toLowerCase() == 'null' ? null : t;
 }
 
+/// A name or time as spoken: short, no brackets, never a segment id.
+String? _shortValue(Object? v) {
+  final t = _optionalText(v);
+  if (t == null || t.length > 40 || t.contains('[') || RegExp(r'\bs-\d+').hasMatch(t)) return null;
+  return t;
+}
+
+const _stopwords = {
+  'the', 'and', 'that', 'this', 'with', 'for', 'are', 'was', 'were', 'will', 'would', 'could',
+  'should', 'have', 'has', 'had', 'not', 'but', 'you', 'your', 'they', 'their', 'them', 'there',
+  'then', 'than', 'from', 'about', 'into', 'out', 'who', 'what', 'when', 'where', 'which', 'how',
+  'why', 'can', 'did', 'does', 'say', 'said', 'also', 'its', 'our', 'his', 'her', 'she', 'him',
+  'mentioned', 'discussed', 'conversation', 'meeting', 'speaker', 'discuss', 'talk', 'talked',
+};
+
+Set<String> _contentWords(String text) => {
+  for (final m in RegExp(r"[a-z0-9]+").allMatches(text.toLowerCase().replaceAll("'", '')))
+    if (m.group(0)!.length >= 3 && !_stopwords.contains(m.group(0))) m.group(0)!,
+};
+
+/// Finds the transcript turns that really contain [claim]'s words (the 1.5B model's own citations
+/// are unreliable). [turnText] maps turn id to its text, in time order. Returns up to 2 ids, the
+/// best match first among equals by time order; empty when no turn shares a content word.
+List<String> findEvidence(String claim, Map<String, String> turnText) {
+  final words = _contentWords(claim);
+  if (words.isEmpty) return const [];
+  final scored = <(String, int)>[];
+  for (final e in turnText.entries) {
+    final score = _contentWords(e.value).intersection(words).length;
+    if (score > 0) scored.add((e.key, score));
+  }
+  if (scored.isEmpty) return const [];
+  final best = scored.map((s) => s.$2).reduce((a, b) => a > b ? a : b);
+  final top = [for (final s in scored) if (s.$2 >= best * 0.6) s]
+    ..sort((a, b) => b.$2.compareTo(a.$2));
+  return [for (final s in top.take(2)) s.$1];
+}
+
 /// Keeps at most 5 bullets; drops any bullet with no text, an unknown kind, or no valid citation.
 /// Throws [FormatException] when nothing usable is left.
-List<SummaryBullet> parseSummary(String raw, Set<String> validIds) {
+///
+/// With [turnText] (id to turn text), citations are recomputed from the words of each bullet; the
+/// model's own `sources` are then only used to decide nothing. Without it they are validated.
+List<SummaryBullet> parseSummary(String raw, Set<String> validIds, {Map<String, String>? turnText}) {
   final list = _decodeObject(raw)['bullets'];
   if (list is! List) throw const FormatException('bullets missing');
   final bullets = <SummaryBullet>[];
@@ -148,15 +191,18 @@ List<SummaryBullet> parseSummary(String raw, Set<String> validIds) {
     if (item is! Map) continue;
     final text = _optionalText(item['text']);
     final kind = BulletKind.values.where((k) => k.name == item['kind']).firstOrNull;
-    final sources = _validIds(item['sources'], validIds);
+    final modelSources = _validIds(item['sources'], validIds);
+    final sources = turnText == null
+        ? modelSources
+        : findEvidence('$text ${_shortValue(item['due']) ?? ''}', turnText);
     if (text == null || kind == null || sources.isEmpty) continue; // uncited bullets are dropped
     bullets.add(
       SummaryBullet(
         text: text,
         kind: kind,
         sources: sources,
-        who: kind == BulletKind.action ? _optionalText(item['who']) : null,
-        due: kind == BulletKind.action ? _optionalText(item['due']) : null,
+        who: kind == BulletKind.action ? _shortValue(item['who']) : null,
+        due: kind == BulletKind.action ? _shortValue(item['due']) : null,
       ),
     );
     if (bullets.length == 5) break;
@@ -167,12 +213,25 @@ List<SummaryBullet> parseSummary(String raw, Set<String> validIds) {
 
 /// A supported answer needs real text and at least one valid citation; otherwise the answer is
 /// exactly [notMentioned] with `supported: false`.
-MeetingAnswer parseAnswer(String question, String raw, Set<String> validIds) {
+///
+/// With [turnText], citations are the turns that contain the answer's own words (a one or two
+/// word answer like "Yes" also uses the question's words). An answer sharing no content word with
+/// the transcript is treated as invented.
+MeetingAnswer parseAnswer(
+  String question,
+  String raw,
+  Set<String> validIds, {
+  Map<String, String>? turnText,
+}) {
   MeetingAnswer unsupported() =>
       MeetingAnswer(question: question, answer: notMentioned, sources: const [], supported: false);
   final json = _decodeObject(raw);
   final answer = _optionalText(json['answer']);
-  final sources = _validIds(json['sources'], validIds);
+  var sources = _validIds(json['sources'], validIds);
+  if (turnText != null && answer != null) {
+    final short = answer.split(RegExp(r'\s+')).length <= 3;
+    sources = findEvidence(short ? '$question $answer' : answer, turnText);
+  }
   if (json['supported'] != true || answer == null || sources.isEmpty) return unsupported();
   if (answer.toLowerCase().startsWith('not mentioned')) return unsupported();
   return MeetingAnswer(

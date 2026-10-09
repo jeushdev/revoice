@@ -39,7 +39,9 @@ class Turn {
     required this.rawText,
     required this.tStartMs,
     required this.tEndMs,
-  }) : text = rawText;
+    String? hintedText,
+  }) : hintedText = hintedText ?? rawText,
+       text = rawText;
 
   /// Id of the first line. Stable while the merge does not change; used as the citation id.
   String get id => segmentIds.first;
@@ -51,6 +53,10 @@ class Turn {
 
   /// The merged original words (lines joined with a space), never rewritten.
   final String rawText;
+
+  /// [rawText] with "..." added where an unfinished fragment is followed by a new sentence. Same
+  /// words, so it passes the word guard; it is only what the model gets to polish.
+  final String hintedText;
 
   /// What to show in the Clean view: [rawText] until polished, then the punctuated text.
   String text;
@@ -109,6 +115,7 @@ List<Turn> mergeFragments(List<MergeLine> lines) {
           speakerId: last.speakerId,
           segmentIds: [...last.segmentIds, current.id],
           rawText: '${last.rawText} ${current.text}',
+          hintedText: '${_closeFragment(last.hintedText, current.text)} ${current.text}',
           tStartMs: last.tStartMs,
           tEndMs: current.tEndMs,
         ),
@@ -127,6 +134,15 @@ List<Turn> mergeFragments(List<MergeLine> lines) {
     previous = current;
   }
   return turns;
+}
+
+/// An unfinished fragment followed by a capitalised new sentence ("Is the paperwork" + "We track
+/// ...") was cut by a pause: mark the cut with "...". Continuations ("and", lowercase) are left.
+String _closeFragment(String text, String next) {
+  final t = text.trimRight();
+  if (endsSentence(t) || RegExp(r'[,;:]$').hasMatch(t) || _startsLowercase(next)) return t;
+  if (_continuers.hasMatch(next.trimLeft())) return t;
+  return t.endsWith('...') || t.endsWith('\u2026') ? t : '$t...';
 }
 
 // --- punctuation pass --------------------------------------------------------------------
@@ -148,6 +164,14 @@ List<String> guardWords(String text) {
   ];
 }
 
+/// Removes "um" / "uh" (and a comma stuck to them) before the model sees the text, so this part
+/// is a rule and not up to the model.
+String stripFillers(String text) => text
+    .replaceAll(RegExp(r"\s*(?<![\w'])(um+|uh+|uhm+)(?![\w'])\s*,?", caseSensitive: false), ' ')
+    .replaceAll(RegExp(r'\s+'), ' ')
+    .replaceAll(RegExp(r'^[\s,]+'), '')
+    .trim();
+
 /// True when [candidate] has exactly the same words as [original] (ignoring punctuation, case,
 /// and um/uh). Anything else (a changed, added or dropped word) means reject.
 bool passesWordGuard(String original, String candidate) {
@@ -160,15 +184,16 @@ bool passesWordGuard(String original, String candidate) {
   return true;
 }
 
-/// Instruction first, text last, so the llama.cpp prompt cache keeps the shared start.
+/// Instruction and worked example first, the text last, so the llama.cpp prompt cache keeps the
+/// shared start. The example matters: without it the small model drops short leading words
+/// ("so", "and"), skips fragments and turns "I will" into "I'll", and the word guard then
+/// rejects the turn. (Fillers are removed by [stripFillers] before this prompt is built.)
 String buildPolishPrompt(String text) =>
     '''
-Rewrite the spoken text below as correctly punctuated written English.
-Rules:
-- Fix punctuation, capital letters and sentence breaks.
-- Remove only the filler words "um" and "uh".
-- Do not add, remove, replace or reorder any other word. Do not fix grammar or wording.
-- Reply with the rewritten text only, nothing else.
+Add punctuation and capital letters to spoken text. Keep every word exactly as spoken, in the same order, even if a sentence sounds unfinished. Never shorten "I will" to "I'll" or change any other word. Reply with the text only.
+
+Example text: so we met on tuesday and i will bring the report is the draft... it is almost done
+Example reply: So we met on Tuesday, and I will bring the report. Is the draft... It is almost done.
 
 Text: $text''';
 
@@ -206,9 +231,15 @@ List<String> chunkForPolish(String text, {int maxChars = 600}) {
   return chunks;
 }
 
-/// No model needed for very short turns: capitalise and close the sentence.
+/// Capitalises the first letter (the model sometimes leaves it lowercase).
+String capitalizeFirst(String text) {
+  final t = text.trimLeft();
+  return t.isEmpty ? t : t[0].toUpperCase() + t.substring(1);
+}
+
+/// No model needed for very short turns: remove fillers, capitalise and close the sentence.
 String simplePolish(String text) {
-  var t = text.trim();
+  var t = stripFillers(text);
   if (t.isEmpty) return t;
   t = t[0].toUpperCase() + t.substring(1);
   return endsSentence(t) ? t : (t.endsWith('...') ? t : '$t.');

@@ -157,7 +157,8 @@ class MeetingAiController extends ChangeNotifier {
   });
 
   Future<void> _polishTurn(Turn turn) async {
-    if (turn.rawText.split(' ').length <= 3) {
+    final input = stripFillers(turn.hintedText); // fillers are removed by a rule, not by the model
+    if (input.split(' ').length <= 3) {
       turn.text = simplePolish(turn.rawText); // not worth a model call
       turn.status = TurnStatus.polished;
       _polishCache[turn.rawText] = (text: turn.text, status: turn.status);
@@ -165,7 +166,7 @@ class MeetingAiController extends ChangeNotifier {
     }
     final out = <String>[];
     var allOk = true;
-    for (final chunk in chunkForPolish(turn.rawText)) {
+    for (final chunk in chunkForPolish(input)) {
       try {
         final reply = await engine.cleanLine(
           text: chunk,
@@ -174,7 +175,7 @@ class MeetingAiController extends ChangeNotifier {
         );
         final candidate = sanitizeModelText(reply);
         if (candidate.isNotEmpty && passesWordGuard(chunk, candidate)) {
-          out.add(candidate);
+          out.add(capitalizeFirst(candidate));
         } else {
           out.add(chunk); // the model changed words: keep the original words
           allOk = false;
@@ -185,7 +186,7 @@ class MeetingAiController extends ChangeNotifier {
         allOk = false;
       }
     }
-    turn.text = out.join(' ');
+    turn.text = allOk ? out.join(' ') : turn.rawText; // any rejected chunk: keep the original words
     turn.status = allOk ? TurnStatus.polished : TurnStatus.kept;
     _polishCache[turn.rawText] = (text: turn.text, status: turn.status);
   }
@@ -200,7 +201,7 @@ class MeetingAiController extends ChangeNotifier {
       task: summaryTask(),
       grammar: summaryGrammar(input.ids),
       maxTokens: 450,
-      parse: (raw) => parseSummary(raw, input.ids),
+      parse: (raw) => parseSummary(raw, input.ids, turnText: input.turnText),
     );
     summary = MeetingSummary(bullets);
     summaryStale = false;
@@ -242,7 +243,7 @@ class MeetingAiController extends ChangeNotifier {
         grammar: answerGrammar(input.ids),
         maxTokens: 220,
         stream: true,
-        parse: (raw) => parseAnswer(q, raw, input.ids),
+        parse: (raw) => parseAnswer(q, raw, input.ids, turnText: input.turnText),
       );
       timingsMs['answer'] = watch.elapsedMilliseconds;
       answers.add(result);
@@ -338,9 +339,10 @@ class MeetingAiController extends ChangeNotifier {
   }
 
   /// The transcript text sent to the model and the segment IDs it may cite.
-  ({String text, Set<String> ids}) _modelInput() {
+  ({String text, Set<String> ids, Map<String, String> turnText}) _modelInput() {
     final lines = <String>[];
     final ids = <String>{};
+    final texts = <String, String>{};
     var chars = 0;
     transcriptTruncated = false;
     for (final turn in _turns.reversed) {
@@ -352,8 +354,11 @@ class MeetingAiController extends ChangeNotifier {
       chars += line.length + 1;
       lines.add(line);
       ids.add(turn.id);
+      texts[turn.id] = turn.text;
     }
-    return (text: lines.reversed.join('\n'), ids: ids);
+    // Time order, so evidence ties go to the earlier turn.
+    final ordered = {for (final id in texts.keys.toList().reversed) id: texts[id]!};
+    return (text: lines.reversed.join('\n'), ids: ids, turnText: ordered);
   }
 
   /// One grammar-constrained call; retries once when the output does not parse.
