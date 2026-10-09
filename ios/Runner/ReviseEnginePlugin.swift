@@ -124,18 +124,14 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let grammar: String?
     // CRM: if the "[id] text" transcript lines can be read from the prompt, the model only writes
     // values and we look up the evidence ourselves (faster, more accurate). Otherwise the model
-    // writes its own citations.
-    var evidenceLines: [CrmEvidence.Line] = []
+    // writes its own citations. (CrmEvidence.plan makes that choice; the Mac test tool uses it too.)
+    var crmPlan: CrmEvidence.Plan?
     switch call.method {
     case "generateCrm":
-      evidenceLines = CrmEvidence.parseTranscript(from: prompt)
-      if evidenceLines.isEmpty {
-        grammar = ReviseGrammars.crm
-        system = system ?? ReviseGrammars.crmSystem
-      } else {
-        grammar = ReviseGrammars.crmValuesOnly
-        system = system ?? ReviseGrammars.crmValuesOnlySystem
-      }
+      let plan = CrmEvidence.plan(forPrompt: prompt)
+      crmPlan = plan
+      grammar = plan.grammar
+      system = system ?? plan.system
     case "cleanLine":
       grammar = nil
       // Dart sends the instruction and the line; make sure the line is in the prompt exactly once.
@@ -153,7 +149,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     let method = call.method
     let systemText = system
-    let lines = evidenceLines
+    let plan = crmPlan
     // Optional streaming: pass "requestId" and every new piece of text arrives on the
     // revise/captions channel as {"type":"llm","requestId":..., "delta":"..."}.
     let requestId = args["requestId"] as? String
@@ -179,7 +175,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       ]
       switch method {
       case "generateCrm":
-        reply["json"] = lines.isEmpty ? out.text : CrmEvidence.attach(to: out.text, lines: lines)
+        reply["json"] = plan?.finish(out.text) ?? out.text
       default: reply["text"] = out.text.trimmingCharacters(in: .whitespacesAndNewlines)
       }
       return reply

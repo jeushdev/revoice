@@ -79,6 +79,26 @@ Models/llm/*.gguf             (later)
   Validation. Validation under the debugger slows GPU work a lot. Also turn Low Power Mode off.
 - The shortened system prompt was tried and **rejected**: citations got worse. System prompt length is nearly free now (cached).
 
+### Mac LLM test tool and end-to-end check
+
+`ios-native/MacLlmTest` is a command-line tool that runs the app's real `generateCrm` path (same `CrmEvidence.plan`,
+`LlamaRunner`, grammars) on a prompt file, with no phone:
+
+```
+cd ios-native/MacLlmTest && swift build
+DYLD_FRAMEWORK_PATH=$(dirname $(find .build -type d -name llama.framework -path "*macos*" | head -1)) \
+  .build/debug/llmtest prompt.txt card.json
+```
+
+It was used to run Jairus's real `SessionController` + `CrmController` (scripted two-person conversation, Stop, automatic cards)
+against the real Swift/LLM code: both cards generated first try, evidence correct, no invented email.
+
+### Runner scheme
+
+`ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme`: the **Run** action is set to **Release** with Metal API Validation
+off, so pressing Run in Xcode builds the fast configuration (Debug + validation made the LLM several times slower). Flutter's own
+`flutter run` / `flutter build` pass their own configuration and are not affected.
+
 ### Channel methods for Dart (all only while state is `stopped`; errors: `model_missing`, `invalid_state`, `inference_failed`)
 
 | Method | Args | Returns |

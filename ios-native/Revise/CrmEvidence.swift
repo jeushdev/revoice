@@ -10,6 +10,27 @@ enum CrmEvidence {
         let text: String
     }
 
+    /// How `generateCrm` handles a Dart prompt. Shared by the app and the Mac test tool so both
+    /// run the same code: if the transcript lines can be read, the model writes values only and
+    /// we add the evidence; otherwise the model writes its own citations.
+    struct Plan {
+        let grammar: String
+        let system: String
+        let lines: [Line]
+
+        /// Turns the model's raw output into the card JSON Dart expects.
+        func finish(_ modelOutput: String) -> String {
+            lines.isEmpty ? modelOutput : CrmEvidence.attach(to: modelOutput, lines: lines)
+        }
+    }
+
+    static func plan(forPrompt prompt: String) -> Plan {
+        let lines = parseTranscript(from: prompt)
+        return lines.isEmpty
+            ? Plan(grammar: ReviseGrammars.crm, system: ReviseGrammars.crmSystem, lines: [])
+            : Plan(grammar: ReviseGrammars.crmValuesOnly, system: ReviseGrammars.crmValuesOnlySystem, lines: lines)
+    }
+
     /// Reads the "[s-0001] some words" lines between <transcript> tags in the Dart prompt.
     /// Returns [] if the format isn't recognised (callers then fall back to model citations).
     static func parseTranscript(from prompt: String) -> [Line] {
