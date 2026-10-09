@@ -1,0 +1,70 @@
+// Apply from the existing shared shell's app/build.gradle.kts:
+// apply(from = "revise-backend.gradle")
+// This is configuration for that application, not a second Android/Flutter project.
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+
+android {
+    defaultConfig {
+        minSdk 26
+        ndk { abiFilters 'arm64-v8a' }
+    }
+    androidResources { noCompress += ['ort', 'litertlm', 'bin'] }
+}
+
+dependencies {
+    implementation 'ai.moonshine:moonshine-voice:0.1.5'
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.18.0'
+}
+
+def verifyModels = { boolean speechOnly ->
+    def root = file('src/main/assets/revise')
+    def manifestFile = new File(root, 'model-manifest.json')
+    if (!manifestFile.isFile()) throw new GradleException('ReVise model manifest is missing.')
+    def manifest = new JsonSlurper().parse(manifestFile)
+    if (manifest.schemaVersion != 1 || manifest.files.size() != 11) {
+        throw new GradleException('ReVise model inventory must contain the 11 pinned assets.')
+    }
+    def seen = new HashSet<String>()
+    manifest.files.each { entry ->
+        if (!(entry.group in ['stt', 'diarization', 'llm']) ||
+            !(entry.path ==~ /models\/(stt|diarization|llm)\/[a-zA-Z0-9_.-]+/) ||
+            !entry.path.startsWith("models/${entry.group}/") || entry.path.endsWith('/..') ||
+            entry.path.endsWith('/.') || !seen.add(entry.path) || entry.sizeBytes <= 0 ||
+            !(entry.sha256 ==~ /[0-9a-f]{64}/)) {
+            throw new GradleException('ReVise model inventory contains an invalid entry.')
+        }
+        if (!speechOnly || entry.group != 'llm') {
+            def asset = new File(root, entry.path)
+            if (!asset.isFile() || asset.length() != entry.sizeBytes) {
+                throw new GradleException("Missing/incorrect ReVise asset: ${entry.path}. Run scripts/prepare-android-models.ps1.")
+            }
+            def hash = MessageDigest.getInstance('SHA-256')
+            asset.withInputStream { stream ->
+                byte[] buffer = new byte[65536]
+                int count
+                while ((count = stream.read(buffer)) >= 0) if (count > 0) hash.update(buffer, 0, count)
+            }
+            if (hash.digest().encodeHex().toString() != entry.sha256) {
+                throw new GradleException("Corrupt ReVise model asset: ${entry.path}.")
+            }
+        }
+    }
+}
+
+tasks.register('verifyReviseModels') {
+    group = 'verification'
+    description = 'Verify all pinned offline STT, diarization and Gemma packaging assets.'
+    doLast { verifyModels(false) }
+}
+tasks.register('verifyReviseSpeechModels') {
+    group = 'verification'
+    description = 'Verify speech assets only for explicitly incomplete development builds.'
+    doLast { verifyModels(true) }
+}
+def speechOnly = providers.gradleProperty('reviseSpeechOnly').map { it == 'true' }.getOrElse(false)
+tasks.configureEach { task ->
+    if (task.name == 'preBuild') task.dependsOn(speechOnly ? 'verifyReviseSpeechModels' : 'verifyReviseModels')
+    // A speech-only development flag can never bypass required Gemma assets in a release build.
+    if (task.name ==~ /pre.*ReleaseBuild/) task.dependsOn('verifyReviseModels')
+}

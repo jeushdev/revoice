@@ -1,0 +1,30 @@
+# Local tooling, scratch output, and credentials
+/work/
+/outputs/
+.env
+.env.*
+!.env.example
+**/local.properties
+.idea/
+*.iml
+*.log
+
+# Generated Flutter/Android output
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+**/.gradle/
+**/build/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# Packaged locally; never commit model binaries or incomplete downloads.
+/android/app/src/main/assets/revise/models/
+*.litertlm
+*.gguf
+*.ort
+*.partial

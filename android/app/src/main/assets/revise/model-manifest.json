@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "assetSetVersion": "revise-android-v1",
+  "speech": {
+    "runtime": "ai.moonshine:moonshine-voice:0.1.5",
+    "revision": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+    "architecture": "tiny-streaming-en",
+    "assetRevision": "quantized_26_08_21"
+  },
+  "crm": {
+    "runtime": "com.google.ai.edge.litertlm:litertlm-android:0.18.0",
+    "repository": "litert-community/Gemma3-1B-IT",
+    "revision": "a6306a4e292016480083b73b8dc6f3f939ae04c3"
+  },
+  "files": [
+    {
+      "group": "stt",
+      "path": "models/stt/adapter.ort",
+      "sizeBytes": 1319664,
+      "sha256": "22ecc949e146c49667fda28d102d4e30749a107dc88a396292aa8f277ef1347c",
+      "crc32c": "kwQ+Bw==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/adapter.ort"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/cross_kv.ort",
+      "sizeBytes": 1287544,
+      "sha256": "143a36667b8d05fd9d04e8c337b7ee121f37ef299aea6b3d82bdb3d3401950b4",
+      "crc32c": "76wzFQ==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/cross_kv.ort"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/decoder_kv.ort",
+      "sizeBytes": 32583720,
+      "sha256": "8852553f312adb6c9aa4d17418015049b30f412209ee569d336548c0044627de",
+      "crc32c": "KJjeNw==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/decoder_kv.ort"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/encoder.ort",
+      "sizeBytes": 7675440,
+      "sha256": "a8414e1a5dedf9f2093d7680601dd8a9b0433e7020260eafe0e370ead91134ca",
+      "crc32c": "UjAIpQ==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/encoder.ort"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/frontend.model.ort",
+      "sizeBytes": 23344,
+      "sha256": "5121b561417b638afce0c6c31b760e37c93cf97f80d9b0031aad1fe7b6f25d61",
+      "crc32c": "aM/+wQ==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/frontend.model.ort"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/frontend.weights.ort",
+      "sizeBytes": 2093464,
+      "sha256": "217da24ac6f522ebf02da8ef288e77d1ac68d50d4a6821433182e4fbf4204bbd",
+      "crc32c": "WYZ7EQ==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/frontend.weights.ort"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/streaming_config.json",
+      "sizeBytes": 509,
+      "sha256": "74fe5ddebd63b17caf59e8a3b18c17547ff7bce1642050edbb1c3962674f8950",
+      "crc32c": "HGL0Ug==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/streaming_config.json"
+    },
+    {
+      "group": "stt",
+      "path": "models/stt/tokenizer.bin",
+      "sizeBytes": 249974,
+      "sha256": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d",
+      "crc32c": "B7s10Q==",
+      "sourceUrl": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/tokenizer.bin"
+    },
+    {
+      "group": "diarization",
+      "path": "models/diarization/segmentation.ort",
+      "sizeBytes": 1594080,
+      "sha256": "9715e3996ef181252aa1cc0c9398060f42b2c984c2fb65e3604262555e2efb1a",
+      "crc32c": "hcqhEA==",
+      "sourceUrl": "https://download.moonshine.ai/model/diarization-community1/segmentation.ort"
+    },
+    {
+      "group": "diarization",
+      "path": "models/diarization/embedding.ort",
+      "sizeBytes": 6975920,
+      "sha256": "6e4af7d49562e6e7042672e444d6394935cb2c23c3a7dd4919da45922b91735b",
+      "crc32c": "r5LVbQ==",
+      "sourceUrl": "https://download.moonshine.ai/model/diarization-community1/embedding.ort"
+    },
+    {
+      "group": "llm",
+      "path": "models/llm/gemma3-1b-it-int4.litertlm",
+      "sizeBytes": 584417280,
+      "sha256": "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
+      "crc32c": null,
+      "sourceUrl": null
+    }
+  ]
+}
