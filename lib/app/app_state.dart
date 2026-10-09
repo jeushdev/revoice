@@ -28,6 +28,15 @@ class SavedSession {
 
   DateTime get startedAt => session.startedAt ?? DateTime.now();
   Duration get duration => session.elapsed;
+
+  /// Releases everything this session holds (transcript, summary, answers, engine). Sessions are
+  /// kept in memory only, so after this no trace of it is left on the phone.
+  void dispose() {
+    summary.dispose();
+    ai.dispose();
+    clean.dispose();
+    session.dispose();
+  }
 }
 
 /// App-wide settings and the session Library.
@@ -95,9 +104,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Removes a session and frees all of its data. The screens that showed it are rebuilt first;
+  /// the controllers are disposed after that frame so nothing listens to a disposed object.
   void delete(SavedSession s) {
     sessions.remove(s);
     notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) => s.dispose());
   }
 
   void update(VoidCallback change) {

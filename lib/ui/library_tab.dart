@@ -105,6 +105,31 @@ class _SessionRow extends StatelessWidget {
     return '${_weekdays[t.weekday - 1]}, ${_months[t.month - 1]} ${t.day}, ${_time(t)}';
   }
 
+  Future<void> _confirmDelete(BuildContext context) async {
+    final app = AppScope.read(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this session?'),
+        content: const Text(
+          'The transcript, summary and answers are removed from this phone. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('Delete', style: TextStyle(color: context.rc.errText)),
+          ),
+        ],
+      ),
+    );
+    if (yes == true) app.delete(saved);
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.rc;
@@ -199,6 +224,11 @@ class _SessionRow extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+            IconButton(
+              tooltip: 'Delete session',
+              icon: Icon(Icons.delete_outline_rounded, color: c.ink3),
+              onPressed: () => _confirmDelete(context),
             ),
             Icon(Icons.chevron_right_rounded, color: c.ink3),
           ],

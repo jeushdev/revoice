@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:revise/app/app_state.dart';
+import 'package:revise/main.dart' show ReviseApp;
 import 'package:revise/engine/mock_caption_engine.dart';
 import 'package:revise/summary/summary_controller.dart';
 
@@ -67,6 +68,34 @@ void main() {
     await tester.tap(find.text('Original'));
     await tester.pumpAndSettle();
     expect(find.text('${session.finals.length} lines'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('delete a saved session from the Library asks first, then frees everything', (tester) async {
+    tester.view
+      ..physicalSize = const Size(1170, 2532)
+      ..devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+    final app = AppState(engineFactory: (_) => CountingMock());
+    final saved = app.newSession();
+    app.save(saved);
+    app.tab = 0; // Library
+    await tester.pumpWidget(ReviseApp(app: app));
+    await tester.pumpAndSettle();
+    expect(app.sessions, [saved]);
+    await tester.tap(find.byTooltip('Delete session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete this session?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(app.sessions, [saved]); // cancelled: still there
+    await tester.tap(find.byTooltip('Delete session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(app.sessions, isEmpty);
+    expect(() => saved.summary.addListener(() {}), throwsFlutterError); // controllers were disposed
+    expect(() => saved.ai.addListener(() {}), throwsFlutterError);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }
