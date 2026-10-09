@@ -148,10 +148,7 @@ class _DebugPageState extends State<_DebugPage> {
                 button('Clean', ai.busy ? null : ai.polish),
                 button('Summary', ai.busy ? null : ai.summarize),
                 button('Ask', ai.busy ? null : () => ai.ask(_sampleQuestion)),
-                button(ai.showClean ? 'Show Original' : 'Show Clean', () {
-                  ai.showClean = !ai.showClean;
-                  setState(() {});
-                }),
+                button(ai.showClean ? 'Show Original' : 'Show Clean', () => ai.setShowClean(!ai.showClean)),
                 button('Edit s-0002', () => ai.editLine('s-0002', 'Sure, tell me about your shop.')),
                 button('Facebook to Messenger', () => ai.replaceAll('Facebook', 'Messenger')),
               ],

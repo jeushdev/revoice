@@ -64,6 +64,12 @@ class MeetingAiController extends ChangeNotifier {
   /// Clean (true) or Original (false) view. The UI toggle just flips this.
   bool showClean = true;
 
+  /// Flip the Clean / Original toggle.
+  void setShowClean(bool clean) {
+    showClean = clean;
+    notifyListeners();
+  }
+
   /// "Polishing transcript... 3 of 7" while [state] is polishing.
   int polishDone = 0;
   int polishTotal = 0;
