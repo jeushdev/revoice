@@ -149,23 +149,10 @@ actor ReviseEngine {
 
     private func loadSTT() async throws {
         guard mic == nil else { return }
-        #if DEBUG
-        if ReviseModelStore.sttDirectory() == nil || ReviseModelStore.diarizationDirectory() == nil {
-            do {
-                try await ReviseModelStore.downloadMissingForDevelopment()
-            } catch {
-                throw ReviseError(
-                    code: .modelMissing,
-                    message: "Models missing and the one-time dev download failed (needs internet once)")
-            }
-        }
-        #endif
         guard let sttDir = ReviseModelStore.sttDirectory(),
             let diarizationDir = ReviseModelStore.diarizationDirectory()
         else {
-            throw ReviseError(
-                code: .modelMissing,
-                message: "Speech or speaker model files are not bundled in the app")
+            throw ReviseError(code: .modelMissing, message: ReviseModelStore.missingDescription())
         }
         let options = [
             TranscriberOption(name: "identify_speakers", value: "true"),

@@ -1,3 +1,6 @@
 *.xcuserstate
 xcuserdata/
 DerivedData/
+
+# ~150 MB of model files; rebuild with fetch-models.sh
+Models/

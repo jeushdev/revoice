@@ -3,11 +3,12 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
+		17A873C80E9587F786FBD34C /* Models in Resources */ = {isa = PBXBuildFile; fileRef = D60BFC1671561F766FC14B11 /* Models */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3556D63D9F96131E9243B8BA /* MoonshineVoice in Frameworks */ = {isa = PBXBuildFile; productRef = BEAD3BD68734DC327D0A76FB /* MoonshineVoice */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -68,6 +69,7 @@
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C689D036302D15E99AE37AA5 /* ReviseModelStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReviseModelStore.swift; path = "../ios-native/Revise/ReviseModelStore.swift"; sourceTree = SOURCE_ROOT; };
+		D60BFC1671561F766FC14B11 /* Models */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = Models; path = "../ios-native/Models"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +112,7 @@
 				97C146F01CF9000F007C117D /* Runner */,
 				97C146EF1CF9000F007C117D /* Products */,
 				331C8082294A63A400263BE5 /* RunnerTests */,
+				D60BFC1671561F766FC14B11 /* Models */,
 			);
 			sourceTree = "<group>";
 		};
@@ -245,6 +248,7 @@
 				3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */,
 				97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */,
 				97C146FC1CF9000F007C117D /* Main.storyboard in Resources */,
+				17A873C80E9587F786FBD34C /* Models in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

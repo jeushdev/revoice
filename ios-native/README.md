@@ -30,19 +30,23 @@ and answers `model_missing`.
      ```
 5. Runner target > Deployment Target: iOS 15 or higher (Moonshine package minimum).
 
-## Models
+## Models (bundled, no network ever)
 
-PRD wants models **bundled**, no download in the shipped app. Layout inside the app bundle:
+Models live in `ios-native/Models/` (about 145 MB, **not in git**). Rebuild them once on a Mac with internet:
 
 ```
-Models/stt-small-streaming/   (Moonshine small streaming English files)
-Models/diarization/           (Moonshine speaker-ID files, ~8 MB)
+sh ios-native/fetch-models.sh
+```
+
+Both `ios/Runner` and `ReviseHarness` reference that folder as a bundled "Models" folder, so a Debug or Release build
+carries the files and works in airplane mode. If a file is missing, `init` returns `sttReady=false` and the `error`
+state says which model is missing (it never waits on the network). Layout inside the app:
+
+```
+Models/stt-small-streaming/   Moonshine Small Streaming English (8 files)
+Models/diarization/           segmentation.ort, embedding.ort
 Models/llm/*.gguf             (later)
 ```
-
-Until bundling is done, **Debug builds only** download STT + diarization once into the phone
-(`ReviseModelStore.downloadMissingForDevelopment`, wrapped in `#if DEBUG`). Needs internet once.
-Release builds contain no download path from our code.
 
 ## Not verified yet (needs the phone)
 

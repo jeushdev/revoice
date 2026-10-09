@@ -18,6 +18,9 @@ targets:
       - path: ../Revise
         excludes:
           - ReviseChannels.swift   # needs Flutter; the harness talks to ReviseEngine directly
+      - path: ../Models        # bundled models (run ios-native/fetch-models.sh first)
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: Moonshine
         product: MoonshineVoice
