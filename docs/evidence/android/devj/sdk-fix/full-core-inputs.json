@@ -1,0 +1,27 @@
+{
+  "commit": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+  "archive": {
+    "url": "https://codeload.github.com/moonshine-ai/moonshine/tar.gz/234f60faa0eb388b01cdf7e60aca232af37aefda",
+    "sha256": "6bd927a48234dced3cc6f208522fe176c248686e9283273c51eddc8d7994e001",
+    "size": 176944864
+  },
+  "tree": {
+    "url": "https://api.github.com/repos/moonshine-ai/moonshine/git/trees/234f60faa0eb388b01cdf7e60aca232af37aefda?recursive=1",
+    "sha256": "006adba0b443e3775a7ca2507469f5348d2c8229d21ff78906134aae81029f6b"
+  },
+  "prepared_files_manifest_sha256": "62416cdd1bf2f91d57990c34f540a61feb1ccd7f42781c2db56cf645cc1e644c",
+  "patched_files": {
+    "core/silero-vad.cpp": "615888e25872171c5587746c2dd01da3ab0ba2c28a7a761e5495f87db2ddba62",
+    "core/silero-vad.h": "4a854fe4a6dddc77f2ed5e0510f467a1311f8635b9ab0cb22f9a4233f0615637",
+    "core/voice-activity-detector.cpp": "1857fdc48787653dc7032eb086ad0809c6145b1d61599c8419dd584045dff7e3",
+    "core/voice-activity-detector.h": "7482c206c6fe1436eff4a6839d857daf1aa5937f45d37447707e7558fe30fd86",
+    "language-bindings/android/java/main/java/ai/moonshine/voice/Transcriber.java": "5cbac694d2eba6e72f662921759340165dcbeacc03339f3ac1c23ee4ed3a2033",
+    "language-bindings/android/moonshine-jni/moonshine-jni.cpp": "9d38d3d2f64ba6b19bccf49bd16c766566d0ccaf2e2580d4a9947f7180be70e8"
+  },
+  "android_ort": {
+    "arm64-v8a": {"directory": "arm64", "sha256": "86e85022fc539963177e478c8e9a8a8219bc3b0d7515bf5297a62986dbc45e7a", "size": 6291928},
+    "armeabi-v7a": {"directory": "armeabi-v7a", "sha256": "a312010c875759084ec1b8da57f289abbf5f5be6b2cad9469ff7653dbb605037", "size": 3865652},
+    "x86_64": {"directory": "x86_64", "sha256": "887bcdac57e4020ebe95c62200677b0f63a977be628a7a0231c7a6a8d8ab9c5c", "size": 6673840}
+  },
+  "provenance": "Archive and Git tree acquired without credentials from exact upstream revision. Android ORT pins match upstream LFS pointer oids AND previously reviewed Maven 0.1.5 AAR bytes. No dependency revision changed."
+}

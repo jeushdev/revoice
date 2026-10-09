@@ -1,0 +1,17 @@
+{
+  "cmake": {
+    "cmake.exe": "41d609bae2a65a9a8e2060bb222d6e031d33c0546054d354137eb490933cb8ac",
+    "ninja.exe": "d5d6705439aac3162ff6cfb1509246cdbbecaf9d10d7c846713af2c07d8d7ee8"
+  },
+  "ndk_extra": {
+    "build/cmake/android.toolchain.cmake": "dbad92d9dcfea0d32b7c5e5f82f5072d878ded5d46a5d3f1f581ea108ca7fe89",
+    "toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-readelf.exe": "2646e382d8b2559b5c4ae91e9a98e187ed9bd59f23936054d424049ef795ba5e"
+  },
+  "msvc_14.29.30133": {
+    "cl.exe": "8e4352b523f4ff37b429aea1d340094be1e17bbdf4f687247fc0be92d6eb9440",
+    "link.exe": "7d80b89e242e2ab4d002c3b3508361a45691a01bd1f4be4d19eb765c8d319762",
+    "lib.exe": "c97dcaf4b4e0d28864aa8be6b5ebd2fe56b0aaad19bc4ba43118b48db771e460",
+    "c1xx.dll": "9a4005af7b8468dde3948f9fe7323772412f4a489d4c4fdd5f727c413f262b33",
+    "c2.dll": "ad3d999355c5e9ceeebf63b4f8e00b23cba939ea59e484e4bd2bd6aa02b0baec"
+  }
+}

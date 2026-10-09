@@ -1,0 +1,7 @@
+{
+  "core/cpp-annote/src/community1_cpp_annote_embedded.cpp": "version https://git-lfs.github.com/spec/v1\noid sha256:9424da4176b33e67e4000ea2a776d64b6a78ee9bbf72d40405fb6805d12758c4\nsize 2535244\n",
+  "core/moonshine-tts/src/zipvoice-voices-data.cpp": "version https://git-lfs.github.com/spec/v1\noid sha256:f3e4d62cae93c465e1de8521bc5706b9a20f834cbbf37404bf03f0d35dffa012\nsize 11695724\n",
+  "core/third-party/onnxruntime/lib/android/arm64/libonnxruntime.so": "version https://git-lfs.github.com/spec/v1\noid sha256:86e85022fc539963177e478c8e9a8a8219bc3b0d7515bf5297a62986dbc45e7a\nsize 6291928\n",
+  "core/third-party/onnxruntime/lib/android/armeabi-v7a/libonnxruntime.so": "version https://git-lfs.github.com/spec/v1\noid sha256:a312010c875759084ec1b8da57f289abbf5f5be6b2cad9469ff7653dbb605037\nsize 3865652\n",
+  "core/third-party/onnxruntime/lib/android/x86_64/libonnxruntime.so": "version https://git-lfs.github.com/spec/v1\noid sha256:887bcdac57e4020ebe95c62200677b0f63a977be628a7a0231c7a6a8d8ab9c5c\nsize 6673840\n"
+}

@@ -92,6 +92,12 @@ all checks with a longer command timeout.
 
 ## Remaining gate before microphone integration
 
+The subsequent [`full-core milestone`](SDK_FULL_CORE_REBUILD.md) records new
+exact-revision source acquisition, real embedded-model verification and full
+Android core/JNI linking. The limits below describe **this earlier fake-ORT
+fixture milestone**; they are not a substitute for the subsequent real-inference
+and error-propagation review.
+
 Tests compile the **complete patched source files** with real pinned ORT API,
 utility, resampler and debug headers, but substitute fake ORT/helper behavior and
 a one-byte **test-only embedded-model header**. Android objects use that same

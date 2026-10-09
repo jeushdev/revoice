@@ -3,7 +3,9 @@
 October 10, 2026. Continue from `devj/android-captions-speakers`; PR base remains
 `codex/kotlin-development`. This handoff contains research, review patches/tests,
 and a portable integration overlay, **not production speech implementation**.
-No APK, native inference, microphone, or M0 acceptance has been demonstrated.
+No APK, Android runtime inference, microphone, or M0 acceptance has been
+demonstrated. Review-only real desktop inference is recorded in the follow-up
+below; it does not approve SDK adoption.
 
 ## Start here
 
@@ -29,6 +31,16 @@ No APK, native inference, microphone, or M0 acceptance has been demonstrated.
    or data clearing. Execute `docs/evidence/android/devj/DEVICE_GATES.md`.
 
 ## Decisions still needed
+
+October 10 full-core follow-up: [`SDK_FULL_CORE_REBUILD.md`](docs/evidence/android/devj/SDK_FULL_CORE_REBUILD.md)
+records exact-revision source/LFS/dependency verification and review-only full
+core/JNI linking for all three Android ABIs with the real embedded Silero model.
+The full Windows core also linked; real ORT inference passed repeated/interleaved
+VAD and tiny-streaming C API sessions, plus core-error propagation to the C API.
+This does not establish Android runtime, diarization or caption delivery. The
+[`core error review`](docs/evidence/android/devj/SDK_CORE_ERROR_REVIEW.md) also
+identifies unchecked Java create-stream handles as an adoption blocker. No app
+dependency, AAR adoption, microphone or device work is approved by these builds.
 
 October 10 cross-session follow-up: user requested the native state correction
 before microphone integration. [`SDK_CROSS_SESSION_FIX.md`](docs/evidence/android/devj/SDK_CROSS_SESSION_FIX.md)
@@ -78,6 +90,8 @@ the new 0003 patch.
 | Published SDK | Artifact hashes/ABIs; Java bytecode and JNI/core inspection; wrapper regressions | No Android inference/runtime test |
 | Final SDK review suite | 16 host JNI scenarios; 10 Java groups, including stateful Stop ledger | Fake JNI/core; not ART, VAD or real audio proof |
 | Candidate JNI rebuild | All three ABIs; three deterministic candidate AAR builds | Published core/ORT unchanged; no application adoption/load test |
+| Full pinned native rebuild | 120 translation units per ABI; core/JNI linked for all three ABIs; 43 JNI exports / 44 resolved core imports each; full Windows core linked | Real embedded Silero, unchanged ORT; unstripped review binaries only; no AAR/app adoption or Android load/inference |
+| Real desktop inference | ORT 1.23.2; 20 reused VAD sessions; isolated/interleaved/restart/gap checks; repeated/interleaved real tiny-streaming C API speech; real core error → C API | No real JNI/ART, diarization, sanitizer, mic, device, Stop/Pause finalization or caption-delivery acceptance |
 | Flutter | Official archive SHA-256; installed Flutter 3.47.6 / Dart 3.13.5; Android precache | Toolchain accepted, not an app build |
 | Models | Ten speech/diarization files verified in original checkout | Local binaries not transferred/committed; integration worktree has none |
 
