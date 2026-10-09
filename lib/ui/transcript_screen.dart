@@ -1,134 +1,260 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 
+import '../app/app_state.dart';
 import '../crm/crm_card.dart';
-import '../crm/crm_controller.dart';
 import '../session/session_controller.dart';
-import 'crm_screen.dart';
-import 'speaker_chip.dart';
+import 'live_screen.dart';
+import 'profiles_screen.dart';
+import 'rename_sheet.dart';
+import 'settings_tab.dart' show Segmented;
+import 'theme.dart';
+import 'widgets.dart';
 
-String formatMs(int ms) {
-  final s = ms ~/ 1000;
-  return '${(s ~/ 60).toString().padLeft(2, '0')}:${(s % 60).toString().padLeft(2, '0')}';
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+String sessionSubtitle(SavedSession s) {
+  final t = s.startedAt;
+  final secs = s.duration.inSeconds;
+  final length = secs < 60
+      ? formatMs(secs * 1000).replaceFirst(RegExp('^0'), '')
+      : '${(secs / 60).round()} min';
+  return '${_months[t.month - 1]} ${t.day} · $length';
 }
 
-class TranscriptScreen extends StatelessWidget {
-  const TranscriptScreen({super.key, required this.session, required this.crm});
+/// Final transcript (mockups 3f, 3k, 3l).
+class TranscriptScreen extends StatefulWidget {
+  const TranscriptScreen({super.key, required this.saved});
+  final SavedSession saved;
 
-  final SessionController session;
-  final CrmController crm;
+  @override
+  State<TranscriptScreen> createState() => _TranscriptScreenState();
+}
 
-  String _plainText() => session.finals
-      .map(
-        (s) =>
-            '[${formatMs(s.tStartMs)}] ${session.displayName(s.speakerId)}: ${s.text}',
-      )
-      .join('\n');
+class _TranscriptScreenState extends State<TranscriptScreen> {
+  /// Original is the default: it is authoritative and needs no model.
+  bool _clean = false;
+
+  SavedSession get saved => widget.saved;
+
+  String _plainText() {
+    final s = saved.session;
+    return s.finals
+        .map(
+          (l) =>
+              '[${formatMs(l.tStartMs)}] ${s.displayName(l.speakerId)}: '
+              '${_clean ? saved.clean.textFor(l) : l.text}',
+        )
+        .join('\n');
+  }
+
+  void _maybeClean() {
+    final crm = saved.crm;
+    final clean = saved.clean;
+    if (_clean && !crm.running && !clean.running && clean.hasPending) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => clean.run());
+    }
+  }
+
+  void _openProfiles() => Navigator.push(
+    context,
+    MaterialPageRoute<void>(builder: (_) => ProfilesScreen(saved: saved)),
+  );
 
   @override
   Widget build(BuildContext context) {
+    final session = saved.session;
     return ListenableBuilder(
-      listenable: Listenable.merge([session, crm]),
+      listenable: Listenable.merge([session, saved.crm, saved.clean]),
       builder: (context, _) {
+        _maybeClean();
+        final c = context.rc;
         final lines = session.finals;
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Transcript'),
-            actions: [
-              IconButton(
-                tooltip: 'Copy text',
-                icon: const Icon(Icons.copy),
-                onPressed: lines.isEmpty
-                    ? null
-                    : () {
-                        Clipboard.setData(ClipboardData(text: _plainText()));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Transcript copied')),
-                        );
-                      },
-              ),
-              // TODO(jairus): Share via share_plus once added.
-            ],
-          ),
-          body: Column(
-            children: [
-              if (session.interrupted)
-                const MaterialBanner(
-                  content: Text(
-                    'Interrupted: this transcript may be incomplete.',
+          body: AmbientBackground(
+            child: SafeArea(
+              child: Column(
+                children: [
+                  NavHeader(
+                    backLabel: 'Library',
+                    title: 'Transcript',
+                    subtitle: sessionSubtitle(saved),
                   ),
-                  actions: [SizedBox.shrink()],
-                ),
-              _CrmStrip(session: session, crm: crm),
-              Expanded(
-                child: lines.isEmpty
-                    ? const Center(child: Text('No speech captured'))
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: lines.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, i) {
-                          final s = lines[i];
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  Expanded(
+                    child: lines.isEmpty
+                        ? _empty(context)
+                        : ListView(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                             children: [
-                              SizedBox(
-                                width: 52,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(top: 12),
+                              if (session.interrupted) ...[
+                                WarnBanner(
+                                  text:
+                                      'Mic interrupted at ${formatMs(session.interruptedAtMs ?? 0)}. '
+                                      'Earlier lines are saved.',
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              _ProfilesCard(
+                                saved: saved,
+                                onOpen: _openProfiles,
+                              ),
+                              const SizedBox(height: 12),
+                              Segmented(
+                                options: const ['Clean', 'Original'],
+                                index: _clean ? 0 : 1,
+                                expand: true,
+                                onChanged: (i) =>
+                                    setState(() => _clean = i == 0),
+                              ),
+                              if (_clean &&
+                                  (saved.crm.running || saved.clean.running))
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
                                   child: Text(
-                                    formatMs(s.tStartMs),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall,
+                                    saved.crm.running
+                                        ? 'Cleaning starts after profiles are built. Showing original lines.'
+                                        : 'Cleaning lines…',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: c.ink2,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    SpeakerChip(
-                                      session: session,
-                                      speakerId: s.speakerId,
-                                    ),
-                                    Text(
-                                      s.text,
-                                      style: const TextStyle(fontSize: 18),
-                                    ),
-                                  ],
+                              const SizedBox(height: 8),
+                              for (final l in lines) _line(context, l),
+                              if (session.interrupted)
+                                _InterruptDivider(
+                                  atMs: session.interruptedAtMs ?? 0,
                                 ),
-                              ),
                             ],
-                          );
-                        },
+                          ),
+                  ),
+                  if (lines.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GlassButton(
+                              label: 'Copy',
+                              icon: Icons.content_copy_rounded,
+                              onPressed: () {
+                                Clipboard.setData(
+                                  ClipboardData(text: _plainText()),
+                                );
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Transcript copied'),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: PrimaryButton(
+                              label: 'Share text',
+                              icon: Icons.ios_share_rounded,
+                              onPressed: () => SharePlus.instance.share(
+                                ShareParams(text: _plainText()),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                ],
               ),
-            ],
+            ),
           ),
         );
       },
     );
   }
+
+  Widget _line(BuildContext context, Segment l) {
+    final c = context.rc;
+    final session = saved.session;
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SessionSpeakerPill(
+                session: session,
+                speakerId: l.speakerId,
+                onRename: (id) => showRenameSheet(context, session, id),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                formatMs(l.tStartMs),
+                style: TextStyle(fontSize: 13, color: c.ink3),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _clean ? saved.clean.textFor(l) : l.text,
+            style: TextStyle(fontSize: 17, height: 1.35, color: c.ink),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _empty(BuildContext context) {
+    final c = context.rc;
+    final app = AppScope.read(context);
+    return StatusMessage(
+      icon: Icons.voice_over_off_rounded,
+      iconColor: c.ink2,
+      iconBg: c.surf3,
+      title: 'No speech captured',
+      body: 'Move the phone closer and try again.',
+      actions: [
+        PrimaryButton(
+          label: 'Start new session',
+          icon: Icons.mic_rounded,
+          onPressed: () {
+            final nav = Navigator.of(context);
+            nav.pop();
+            openLiveSession(nav.context);
+          },
+        ),
+        GlassButton(
+          label: 'Delete session',
+          color: c.errText,
+          onPressed: () {
+            app.delete(saved);
+            Navigator.pop(context);
+          },
+        ),
+      ],
+    );
+  }
 }
 
-class _CrmStrip extends StatelessWidget {
-  const _CrmStrip({required this.session, required this.crm});
-
-  final SessionController session;
-  final CrmController crm;
+class _ProfilesCard extends StatelessWidget {
+  const _ProfilesCard({required this.saved, required this.onOpen});
+  final SavedSession saved;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
-    if (session.finals.isEmpty) return const SizedBox.shrink();
-    final named = crm.namedSpeakers;
+    final c = context.rc;
+    final crm = saved.crm;
     final cards = crm.cards.values.toList();
-    final done = cards.where((c) => c.status == CrmStatus.done).length;
-    final failed = cards.where((c) => c.status == CrmStatus.failed).length;
-
+    final done = cards.where((x) => x.status == CrmStatus.done).length;
+    final failed = cards.where((x) => x.status == CrmStatus.failed).length;
     final String text;
-    if (named.isEmpty) {
-      text = 'Name a speaker to build a profile. Tap a label to rename.';
+    if (crm.namedSpeakers.isEmpty) {
+      text = 'Name a speaker to build a profile';
     } else if (crm.running) {
       text = 'Building profiles… $done of ${cards.length}';
     } else {
@@ -136,44 +262,86 @@ class _CrmStrip extends StatelessWidget {
           '$done profile${done == 1 ? '' : 's'} ready'
           '${failed > 0 ? ' · $failed failed' : ''}';
     }
-
-    return Card(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.badge_outlined),
-                const SizedBox(width: 8),
-                Expanded(child: Text(text)),
-              ],
-            ),
-            if (crm.running) const LinearProgressIndicator(),
-            Wrap(
-              spacing: 8,
-              children: [
-                if (failed > 0 && !crm.running)
-                  TextButton(
-                    onPressed: crm.retryFailed,
-                    child: const Text('Retry CRM'),
-                  ),
-                if (cards.isNotEmpty)
-                  FilledButton.tonal(
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => CrmScreen(session: session, crm: crm),
+    return Glass(
+      color: c.pc.withValues(alpha: 0.85),
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      text,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: c.opc,
                       ),
                     ),
-                    child: const Text('Open CRM cards'),
                   ),
+                  if (failed > 0 && !crm.running)
+                    TextButton(
+                      onPressed: crm.retryFailed,
+                      child: const Text('Retry CRM'),
+                    ),
+                  Icon(Icons.chevron_right_rounded, color: c.opc),
+                ],
+              ),
+              if (crm.running) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: cards.isEmpty ? null : done / cards.length,
+                    minHeight: 5,
+                    color: c.primaryFill,
+                    backgroundColor: c.surf,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InterruptDivider extends StatelessWidget {
+  const _InterruptDivider({required this.atMs});
+  final int atMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.rc;
+    return Padding(
+      padding: const EdgeInsets.only(top: 18),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: c.warn)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              children: [
+                Icon(Icons.mic_off_rounded, size: 16, color: c.warn),
+                const SizedBox(width: 4),
+                Text(
+                  'Interrupted · ${formatMs(atMs)}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: c.warn,
+                  ),
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+          Expanded(child: Divider(color: c.warn)),
+        ],
       ),
     );
   }

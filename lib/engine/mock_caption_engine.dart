@@ -13,6 +13,15 @@ enum MockScenario {
 
   /// Like [meeting], but Sam's CRM card fails twice before a manual retry works.
   crmFailure,
+
+  /// The mic drops after five lines (state `error`); earlier lines are kept.
+  micInterrupted,
+
+  /// `start` fails with `permission_denied`.
+  micDenied,
+
+  /// `init` reports no speech model; `start` fails with `model_missing`.
+  modelMissing,
 }
 
 /// Replays a scripted conversation through the exact contract events, so the
@@ -57,12 +66,25 @@ class MockCaptionEngine implements CaptionEngine {
   Future<InitResult> init() async {
     await Future<void>.delayed(const Duration(milliseconds: 200));
     _emitState(EngineState.ready);
-    return const InitResult(sttReady: true, llmReady: true);
+    final stt = scenario != MockScenario.modelMissing;
+    return InitResult(sttReady: stt, llmReady: true);
   }
 
   @override
   Future<void> start({String language = 'en'}) async {
     _require({EngineState.ready, EngineState.stopped}, 'start');
+    if (scenario == MockScenario.micDenied) {
+      throw const EngineException(
+        EngineErrorCode.permissionDenied,
+        'Microphone permission denied.',
+      );
+    }
+    if (scenario == MockScenario.modelMissing) {
+      throw const EngineException(
+        EngineErrorCode.modelMissing,
+        'Speech model not found.',
+      );
+    }
     final session = ++_session;
     _segmentCounter = 0;
     _clock
@@ -90,7 +112,11 @@ class MockCaptionEngine implements CaptionEngine {
   @override
   Future<void> stop() async {
     if (_state == EngineState.stopped) return;
-    _require({EngineState.listening, EngineState.paused}, 'stop');
+    _require({
+      EngineState.listening,
+      EngineState.paused,
+      EngineState.error,
+    }, 'stop');
     _session++; // cancels playback; the in-flight line is flushed below
     _flushPending();
     _resumeGate?.complete();
@@ -167,6 +193,11 @@ class MockCaptionEngine implements CaptionEngine {
       if (_pendingId == id) _emitCaption(id, text, speaker, true);
       _pendingId = null;
       _pendingLine = null;
+      if (scenario == MockScenario.micInterrupted && _segmentCounter == 5) {
+        _clock.stop();
+        _emitState(EngineState.error, 'Microphone interrupted.');
+        return;
+      }
     }
   }
 
@@ -232,9 +263,9 @@ class MockCaptionEngine implements CaptionEngine {
     }
   }
 
-  void _emitState(EngineState s) {
+  void _emitState(EngineState s, [String? message]) {
     _state = s;
-    _add(StateEvent(s));
+    _add(StateEvent(s, message));
   }
 
   void _add(EngineEvent e) {

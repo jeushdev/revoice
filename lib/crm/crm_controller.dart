@@ -2,17 +2,20 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
+import '../engine/llm_lock.dart';
 import '../session/session_controller.dart';
 import 'crm_card.dart';
 
 /// Generates CRM cards automatically after Stop, one named speaker at a time.
 class CrmController extends ChangeNotifier {
-  CrmController(this.engine, this.session) {
+  CrmController(this.engine, this.session, {LlmLock? lock})
+    : lock = lock ?? LlmLock() {
     session.addListener(_onSessionChanged);
   }
 
   final CaptionEngine engine;
   final SessionController session;
+  final LlmLock lock;
 
   /// Target input budget for one speaker (~4 chars per token).
   static const maxInputTokens = 1500;
@@ -81,7 +84,9 @@ class CrmController extends ChangeNotifier {
     final prompt = buildPrompt(card, lines.values.toList());
     for (var attempt = 1; attempt <= 2; attempt++) {
       try {
-        final raw = await engine.generateCrm(prompt: prompt, maxTokens: 512);
+        final raw = await lock.run(
+          () => engine.generateCrm(prompt: prompt, maxTokens: 512),
+        );
         card
           ..applyModelOutput(raw, lines)
           ..status = CrmStatus.done;

@@ -46,6 +46,16 @@ class SessionController extends ChangeNotifier {
   InitResult? initResult;
   bool interrupted = false;
 
+  /// Wall-clock start of the session, for the Library.
+  DateTime? startedAt;
+
+  /// Session time when the mic dropped (state `error`), for the banner.
+  int? interruptedAtMs;
+  final Stopwatch _clock = Stopwatch();
+
+  /// Listening time so far (pauses excluded).
+  Duration get elapsed => _clock.elapsed;
+
   final Map<String, Segment> _segments = {};
   final Map<int, SpeakerName> speakerNames = {};
   ({String name, int fromSpeaker})? _pendingCall;
@@ -90,12 +100,28 @@ class SessionController extends ChangeNotifier {
     speakerNames.clear();
     _pendingCall = null;
     interrupted = false;
+    interruptedAtMs = null;
     errorMessage = null;
+    lastErrorCode = null;
+    _clock
+      ..stop()
+      ..reset();
     await _guard(() => engine.start());
+    if (lastErrorCode == null) {
+      startedAt = DateTime.now();
+      _clock.start();
+    }
   }
 
-  Future<void> pause() => _guard(engine.pause);
-  Future<void> resume() => _guard(engine.resume);
+  Future<void> pause() async {
+    await _guard(engine.pause);
+    _clock.stop();
+  }
+
+  Future<void> resume() async {
+    await _guard(engine.resume);
+    if (state == EngineState.listening) _clock.start();
+  }
 
   /// Resolves after native confirmed `stopped` and pending lines are flushed.
   Future<void> stop() async {
@@ -104,6 +130,7 @@ class SessionController extends ChangeNotifier {
     if (state != EngineState.stopped) {
       await seen.future.timeout(const Duration(seconds: 5), onTimeout: () {});
     }
+    _clock.stop();
     // Unconfirmed partials are excluded from the transcript and CRM.
     _segments.removeWhere((_, s) => !s.isFinal);
     notifyListeners();
@@ -126,6 +153,8 @@ class SessionController extends ChangeNotifier {
         if (state == EngineState.error) {
           errorMessage = message;
           interrupted = true;
+          interruptedAtMs = _clock.elapsedMilliseconds;
+          _clock.stop();
         }
         if (state == EngineState.stopped || state == EngineState.error) {
           _stoppedSeen?.complete();

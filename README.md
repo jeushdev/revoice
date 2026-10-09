@@ -10,7 +10,8 @@ final transcript and Auto-CRM cards. All AI runs on the phone. Spec: [PRD.md](PR
 | `lib/engine/` | Jairus | Platform contract (PRD section 7): events, `CaptionEngine`, `PlatformCaptionEngine` (channels), `MockCaptionEngine` (scripted demo) |
 | `lib/session/` | Jairus | Session state, partial/final handling, name rules (F3) |
 | `lib/crm/` | Jairus | CRM prompt, JSON parsing, evidence validation, retry (F4) |
-| `lib/ui/` | Jairus | Home, Live captions, Transcript, CRM cards |
+| `lib/app/` | Jairus | App state: settings, Library sessions |
+| `lib/ui/` | Jairus | Screens from Claude Design "ReVise Mockups v3": Record / Library / Settings tabs, Live captions (portrait + landscape), Rename sheet, Transcript (Clean/Original), Profiles, error states. Tokens in `theme.dart` |
 | `ios/Runner/ReviseEnginePlugin.swift` | Zairus | iOS native engine. Channels and state machine done; wire Moonshine + LLM at `TODO(zairus)` |
 | `android/app/src/main/kotlin/com/larpcode/revise/ReviseEnginePlugin.kt` | Jeush, Sam | Android native engine. Same contract; wire at `TODO(jeush)` / `TODO(sam)` |
 
@@ -27,10 +28,14 @@ flutter test
 flutter run            # Android phone or emulator; iOS needs Xcode on the Mac
 ```
 
-Home has a **Demo / Sample data** switch (on by default). It replays a scripted
+Settings has a **Sample data** switch (on by default). It replays a scripted
 4-person meeting through the same events, so the UI works without native code.
-Turn it off to use the native engine; until Moonshine is wired in, `start`
-returns `model_missing`.
+**Sample scenario** picks a demo state: meeting, profile fails, mic interrupted,
+no speech, mic denied, model missing. Turn Sample data off to use the native
+engine; until Moonshine is wired in, `start` returns `model_missing`.
+
+Live captions rotate to the landscape caption view (or tap the full screen
+button). The rest of the app is portrait only.
 
 ## iOS (Zairus)
 
