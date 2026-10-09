@@ -122,7 +122,9 @@ class MockCaptionEngine implements CaptionEngine {
     });
   }
 
-  /// Demo mode has no model for the generic LLM call; callers treat model_missing as "skip".
+  /// Demo mode answers the three meeting-AI calls (summary, suggested questions, Q&A) with simple
+  /// rule-based stand-ins built from the transcript in the prompt, so the UI can be built without
+  /// a phone. Anything else still reports model_missing.
   @override
   Future<String> generate({
     required String prompt,
@@ -130,10 +132,61 @@ class MockCaptionEngine implements CaptionEngine {
     String? system,
     Object? jsonGrammar,
     String? requestId,
-  }) async => throw const EngineException(
-    EngineErrorCode.modelMissing,
-    'Demo mode has no on-device model for this step.',
-  );
+  }) async {
+    final grammar = jsonGrammar is String ? jsonGrammar : '';
+    final turns = [
+      for (final m in RegExp(r'^\[(s-\d+)\] [^:\n]+: (.+)$', multiLine: true).allMatches(prompt))
+        (id: m.group(1)!, text: m.group(2)!),
+    ];
+    if (turns.isEmpty ||
+        !(grammar.contains('bullets') || grammar.contains('questions') || grammar.contains('supported'))) {
+      throw const EngineException(
+        EngineErrorCode.modelMissing,
+        'Demo mode has no on-device model for this step.',
+      );
+    }
+    return _llm(() {
+      if (grammar.contains('bullets')) {
+        final picks = {0, turns.length ~/ 2, turns.length - 1}.map((i) => turns[i]).toList();
+        const kinds = ['topic', 'decision', 'action'];
+        return jsonEncode({
+          'bullets': [
+            for (var i = 0; i < picks.length; i++)
+              {
+                'text': picks[i].text.split(' ').take(10).join(' '),
+                'kind': kinds[i % 3],
+                if (kinds[i % 3] == 'action') ...{'who': 'Sam', 'due': 'Friday'},
+                'sources': [picks[i].id],
+              },
+          ],
+        });
+      }
+      if (grammar.contains('questions')) {
+        return jsonEncode({
+          'questions': ['What was agreed?', 'Who has an action item?', 'Is a deadline mentioned?'],
+        });
+      }
+      final question = RegExp(r'^Question: (.+)$', multiLine: true).firstMatch(prompt)?.group(1) ?? '';
+      Set<String> words(String t) => {
+        for (final w in RegExp(r'[a-z]{4,}').allMatches(t.toLowerCase())) w.group(0)!,
+      };
+      final asked = words(question);
+      ({String id, String text})? best;
+      var bestScore = 0;
+      for (final t in turns) {
+        final score = words(t.text).intersection(asked).length;
+        if (score > bestScore) {
+          best = t;
+          bestScore = score;
+        }
+      }
+      return jsonEncode(
+        best == null
+            ? {'answer': 'Not mentioned in the conversation.', 'supported': false, 'sources': <String>[]}
+            : {'answer': best.text, 'supported': true, 'sources': [best.id]},
+      );
+    });
+  }
 
   @override
   Future<String> cleanLine({

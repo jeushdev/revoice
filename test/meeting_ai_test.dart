@@ -472,10 +472,15 @@ void main() {
       for (var i = 0; i < 200 && ai.state != MeetingAiState.error && ai.state != MeetingAiState.done; i++) {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
-      // Demo mode has a clean-up stand-in but no summary model: polish works, then summary reports it.
+      // Demo mode answers polish, summary and suggestions with rule-based stand-ins.
+      expect(ai.state, MeetingAiState.done);
       expect(ai.cleanTurns, isNotEmpty);
-      expect(ai.state, MeetingAiState.error);
-      expect(ai.errorMessage, contains('Demo mode'));
+      expect(ai.summary!.bullets, isNotEmpty);
+      expect(ai.suggestedQuestions, hasLength(3));
+      final a = await ai.ask('Who will send the deck by Friday?');
+      expect(a.supported, isTrue);
+      expect(a.sources, isNotEmpty);
+      expect((await ai.ask('What is the weather?')).answer, notMentioned);
     });
   });
 }
