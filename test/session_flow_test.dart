@@ -295,6 +295,14 @@ void main() {
     expect(summary.questions.first.answer, contains('demo deck'));
     summary.dispose();
   });
+  test('the summary never contains questions', () {
+    expect(
+      SummaryController.dropQuestions('Mark and Anna agreed on a plan. What should they do next? Who pays? Did they agree? Mark sends the guide by Friday.'),
+      'Mark and Anna agreed on a plan. Mark sends the guide by Friday.',
+    );
+    expect(SummaryController.dropQuestions('How much is it?'), '');
+  });
+
 }
 
 class _CountingLlm extends ScriptedLlm {

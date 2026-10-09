@@ -349,7 +349,10 @@ class SummaryController extends ChangeNotifier {
     final out = await _json(_summaryPrompt(), maxTokens: 220, grammar: summaryTextGrammar);
     final text = (out['summary'] as String?)?.trim() ?? '';
     if (text.isEmpty) throw const FormatException('empty summary');
-    summary = text;
+    // A summary states what happened. Drop any sentence that is a question.
+    final statements = dropQuestions(text);
+    if (statements.isEmpty) throw const FormatException('summary had only questions');
+    summary = statements;
     _summarySignature = signature;
   }
 
@@ -394,6 +397,21 @@ class SummaryController extends ChangeNotifier {
       }
     }
     throw last!;
+  }
+
+  /// Keeps only the sentences that are statements: drops any that end in "?" or start with a
+  /// question word (what, how, why, who, when, where, did, do, can, should).
+  @visibleForTesting
+  static String dropQuestions(String text) {
+    final questionStart = RegExp(r'^(what|how|why|who|when|where|did|do|can|should)\b', caseSensitive: false);
+    final kept = [
+      for (final sentence in text.split(RegExp(r'\n+|(?<=[.?!])\s+')))
+        if (sentence.trim().isNotEmpty &&
+            !sentence.trim().endsWith('?') &&
+            !questionStart.hasMatch(sentence.trim()))
+          sentence.trim(),
+    ];
+    return kept.join(' ');
   }
 
   /// Every word of the transcript plus the speaker names.
@@ -465,7 +483,7 @@ ${_transcriptText(rawLabels: true)}
   String _summaryPrompt() =>
       '''
 TASK: summary
-Summarize this conversation in 2 to 4 plain sentences: what it was about, who took part, and any decisions or deadlines.
+Summarize this conversation in 2 to 4 plain statements: what it was about, who took part, and any decisions or deadlines. Write statements only. Never write a question or end a sentence with a question mark.
 Return only JSON: {"summary": "<text>"}
 Rules:
 $_rules
