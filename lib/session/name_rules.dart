@@ -160,8 +160,10 @@ const _stopwords = {
   'anyway',
 };
 
+// Apostrophes: STT may output ' or the curly ’. Covers "I'm X", "I am X", "my name is X",
+// "my name's X", "name's X", "this is X", "call me X", "you can call me X".
 final _selfIntro = RegExp(
-  r"\b(?:i'm|i am|my name is|this is|call me)\s+([a-z][a-z'\-]*)",
+  r"\b(?:i['’]m|i am|my name(?:['’]s| is)|name['’]s|this is|call me)\s+([a-z][a-z'’\-]*)",
   caseSensitive: false,
 );
 final _calledAtStart = RegExp(

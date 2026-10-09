@@ -1,6 +1,7 @@
 import Foundation
 
 // Usage: llmtest <promptFile> <outFile> [modelPath]
+//        llmtest generate <promptFile> <outFile> [systemFile] [grammarFile]   (the generic `generate` method)
 // Runs generateCrm exactly like the app: plan -> warm-up -> generate -> add evidence.
 // Default model: ../Models/llm/<first .gguf>. Run with DYLD_FRAMEWORK_PATH pointing at the
 // macOS llama.framework inside .build/artifacts (see README).
@@ -9,7 +10,27 @@ setvbuf(stdout, nil, _IONBF, 0)
 // Everything lives in a function so the model is freed before the process exits;
 // otherwise Metal's exit-time cleanup aborts.
 func run() throws {
-    let args = CommandLine.arguments
+    var args = CommandLine.arguments
+    if args.count >= 4, args[1] == "generate" {
+        // Generic mode: free system prompt and optional GBNF grammar, like the app's `generate` method.
+        let prompt = try String(contentsOfFile: args[2], encoding: .utf8)
+        let system = args.count > 4 ? try String(contentsOfFile: args[4], encoding: .utf8) : nil
+        let grammar = args.count > 5 ? try String(contentsOfFile: args[5], encoding: .utf8) : nil
+        // LLM_PATH=/path/to/model.gguf overrides the default (first .gguf in ../Models/llm).
+        let modelPath: String
+        if let override = ProcessInfo.processInfo.environment["LLM_PATH"] {
+            modelPath = override
+        } else {
+            let dir = "../Models/llm"
+            let file = try FileManager.default.contentsOfDirectory(atPath: dir).sorted().first { $0.hasSuffix(".gguf") }!
+            modelPath = "\(dir)/\(file)"
+        }
+        let runner = try LlamaRunner(modelPath: modelPath)
+        let out = try runner.generate(prompt: prompt, system: system, maxTokens: 512, grammar: grammar)
+        try out.text.write(toFile: args[3], atomically: true, encoding: .utf8)
+        print("wrote \(out.stats.generatedTokens) tokens in \(out.stats.generateMs) ms; prompt \(out.stats.promptTokens) tokens")
+        return
+    }
     guard args.count >= 3 else { print("usage: llmtest <promptFile> <outFile> [modelPath]"); exit(2) }
     let prompt = try String(contentsOfFile: args[1], encoding: .utf8)
     let modelPath: String

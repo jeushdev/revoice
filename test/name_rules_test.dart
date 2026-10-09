@@ -5,7 +5,14 @@ void main() {
   test('self-introductions', () {
     expect(selfIntroName("Hi everyone, I'm Zairus, I lead product."), 'Zairus');
     expect(selfIntroName('my name is jeush'), 'Jeush');
+    expect(selfIntroName("my name's John"), 'John');
+    expect(selfIntroName('My name’s John, nice to meet you'), 'John'); // curly apostrophe
+    expect(selfIntroName("Hi, I'm David."), 'David');
+    expect(selfIntroName("Hi David, my name's John. Nice to meet you."), 'John');
+    expect(selfIntroName('you can call me Dee'), 'Dee');
+    expect(selfIntroName("I’m David"), 'David');
     expect(selfIntroName("I'm good, thanks"), isNull);
+    expect(selfIntroName("My name's not important"), isNull);
     expect(selfIntroName('This is great'), isNull);
   });
 
