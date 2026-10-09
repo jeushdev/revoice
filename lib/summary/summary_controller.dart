@@ -41,6 +41,9 @@ class SuggestedQuestion {
   /// Segment ids the answer came from (validated against the transcript).
   List<String> sources = const [];
   String? error;
+
+  /// Answer worked out in the background before the chip was shown; a tap uses it instantly.
+  ({bool found, String? answer, List<String> sources})? cached;
 }
 
 /// After Stop: matches speakers to the names entered before recording,
@@ -60,6 +63,9 @@ class SummaryController extends ChangeNotifier {
   static const maxInputTokens = 1800;
 
   /// Used when the model's questions are missing or invalid.
+  /// Suggested questions shown (each already answered in the background).
+  static const maxSuggested = 3;
+
   static const fallbackQuestions = [
     'What was it about?',
     'Who took part?',
@@ -156,7 +162,7 @@ class SummaryController extends ChangeNotifier {
     if (steps[SummaryStep.suggesting] != StepStatus.done) {
       await _step(SummaryStep.suggesting, _suggest, fatal: false);
       if (questions.isEmpty) {
-        questions.addAll(fallbackQuestions.map(SuggestedQuestion.new));
+        await _keepAnswerable(fallbackQuestions.map(SuggestedQuestion.new).toList());
         steps[SummaryStep.suggesting] = StepStatus.done;
       }
     }
@@ -166,52 +172,85 @@ class SummaryController extends ChangeNotifier {
     if (stale) _onSessionChanged(); // labels moved while it was running: write it again
   }
 
-  /// Answers [q] (also used to retry a failed answer).
+  /// Answers [q] (also used to retry a failed answer). Suggested questions already have their
+  /// answer cached, so a tap shows it at once.
   Future<void> ask(SuggestedQuestion q) async {
     if (q.status == QuestionStatus.loading) return;
+    if (!asked.contains(q)) asked.add(q);
+    final cached = q.cached;
+    if (cached != null) {
+      _apply(q, cached);
+      notifyListeners();
+      return;
+    }
     q
       ..status = QuestionStatus.loading
       ..error = null;
-    if (!asked.contains(q)) asked.add(q);
     notifyListeners();
     try {
-      final lineText = {for (final l in session.finals) l.id: l.text};
-      final known =
-          '${lineText.values.join(' ')} ${session.speakerNames.values.map((n) => n.name).join(' ')}';
-      // The conversation never uses any word of the question: say so without asking the model.
-      if (nothingToAnswerFrom(q.text, known)) {
-        _setNotFound(q);
-      } else {
-        final out = await _json(
-          _answerPrompt(q.text),
-          maxTokens: 320,
-          grammar: foundAnswerGrammar(lineText.keys),
-        );
-        final answer = (out['answer'] as String?)?.trim() ?? '';
-        final said = out['found'];
-        // The grammar always writes "found"; be lenient if it ever arrives as text.
-        var found = said == true || '$said'.toLowerCase() == 'true' || '$said'.toLowerCase() == 'yes';
-        if (found && answer.isEmpty) throw const FormatException('empty answer');
-        // Citations come from the words of the answer, not from the model; an answer that no line
-        // supports, or that names something nobody said, is "not mentioned".
-        final sources = found ? findEvidence(answer, lineText) : const <String>[];
-        if (found && (sources.isEmpty || inventsName(answer, '$known ${q.text}'))) found = false;
-        if (found) {
-          q
-            ..found = true
-            ..answer = answer
-            ..sources = sources
-            ..status = QuestionStatus.answered;
-        } else {
-          _setNotFound(q);
-        }
-      }
+      final result = await _answerFor(q.text);
+      q.cached = result;
+      _apply(q, result);
     } on Object catch (e) {
       q
         ..status = QuestionStatus.failed
         ..error = _message(e);
     }
     notifyListeners();
+  }
+
+  void _apply(SuggestedQuestion q, ({bool found, String? answer, List<String> sources}) r) {
+    q
+      ..found = r.found
+      ..answer = r.found ? r.answer : null
+      ..sources = r.found ? r.sources : const []
+      ..status = QuestionStatus.answered;
+  }
+
+  /// One answer: the model's text, kept only when lines of the conversation support it.
+  Future<({bool found, String? answer, List<String> sources})> _answerFor(String question) async {
+    const notFound = (found: false, answer: null, sources: <String>[]);
+    final lineText = {for (final l in session.finals) l.id: l.text};
+    final known = _knownText();
+    // The conversation never uses any word of the question: say so without asking the model.
+    if (nothingToAnswerFrom(question, known)) return notFound;
+    final out = await _json(
+      _answerPrompt(question),
+      maxTokens: 320,
+      grammar: foundAnswerGrammar(lineText.keys),
+    );
+    final answer = (out['answer'] as String?)?.trim() ?? '';
+    final said = out['found'];
+    // The grammar always writes "found"; be lenient if it ever arrives as text.
+    final found = said == true || '$said'.toLowerCase() == 'true' || '$said'.toLowerCase() == 'yes';
+    if (found && answer.isEmpty) throw const FormatException('empty answer');
+    if (!found) return notFound;
+    // Citations come from the words of the answer, not from the model; an answer that no line
+    // supports, or that names something nobody said, is "not mentioned".
+    final sources = findEvidence(answer, lineText);
+    if (sources.isEmpty || inventsName(answer, '$known $question')) return notFound;
+    return (found: true, answer: answer, sources: sources);
+  }
+
+  /// Answers candidate questions in the background and keeps only the supported ones, so every
+  /// chip shown has a real answer behind it. At most [maxSuggested] are kept.
+  Future<void> _keepAnswerable(List<SuggestedQuestion> candidates) async {
+    final kept = <SuggestedQuestion>[];
+    for (final q in candidates) {
+      if (kept.length == maxSuggested) break;
+      try {
+        final r = await _answerFor(q.text);
+        if (r.found) {
+          q.cached = r;
+          kept.add(q);
+        }
+      } on Object {
+        // A failed answer is not shown as a suggestion.
+      }
+    }
+    questions
+      ..clear()
+      ..addAll(kept);
   }
 
   void _setNotFound(SuggestedQuestion q) {
@@ -319,15 +358,18 @@ class SummaryController extends ChangeNotifier {
     final list = out['questions'];
     if (list is! List) throw const FormatException('questions is not a list');
     final seen = <String>{};
+    final candidates = <SuggestedQuestion>[];
     for (final q in list) {
       if (q is! String) continue;
       final t = q.trim();
       if (t.isEmpty || t.length > 90 || !t.endsWith('?')) continue;
       // A question the conversation cannot answer is not worth suggesting.
       if (nothingToAnswerFrom(t, _knownText())) continue;
-      if (seen.add(t.toLowerCase())) questions.add(SuggestedQuestion(t));
-      if (questions.length == 5) break;
+      if (seen.add(t.toLowerCase())) candidates.add(SuggestedQuestion(t));
+      if (candidates.length == 5) break;
     }
+    // Answer them now; only questions with a supported answer become chips.
+    await _keepAnswerable(candidates);
   }
 
   /// One LLM request with one retry on invalid output.

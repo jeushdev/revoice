@@ -154,6 +154,7 @@ void main() {
           '{"speakers": {"1": "Mallory", "2": "Sam", "3": "sam", "9": "Sam"}}',
       'summary': 'Sure! {"summary": "Short recap."}',
       'questions': '{"questions": ["Who took part?", "not a question", 3, "Who took part?"]}',
+      'answer': '{"found": true, "answer": "Zairus and Jeush took part.", "sources": []}',
     });
     final session = await recordFullMeeting(
       MockScenario.meeting,
@@ -274,4 +275,42 @@ void main() {
     expect(session.displayName(1), 'Speaker 1');
     summary.dispose();
   });
+
+  test('suggested questions are answered in the background; unanswerable ones are dropped; tap is instant', () async {
+    final engine = _CountingLlm({
+      'match_speakers': '{"speakers": {}}',
+      'summary': '{"summary": "Short recap."}',
+      'questions': '{"questions": ["What is the weather?", "Who took part?", "What did Sam agree to do?"]}',
+      'answer': '{"found": true, "answer": "Sam will send the demo deck by Friday.", "sources": []}',
+    });
+    final session = await recordFullMeeting(MockScenario.meeting, engine: engine);
+    final summary = SummaryController(engine, session);
+    await summary.run();
+    expect(summary.questions.map((q) => q.text), ['Who took part?', 'What did Sam agree to do?']);
+    expect(summary.questions.every((q) => q.cached != null && q.cached!.sources.isNotEmpty), isTrue);
+    final calls = engine.calls;
+    await summary.ask(summary.questions.first);
+    expect(engine.calls, calls); // no model call: the answer was ready
+    expect(summary.questions.first.status, QuestionStatus.answered);
+    expect(summary.questions.first.answer, contains('demo deck'));
+    summary.dispose();
+  });
+}
+
+class _CountingLlm extends ScriptedLlm {
+  _CountingLlm(super.replies);
+  int calls = 0;
+
+  @override
+  Future<String> generate({
+    required String prompt,
+    int maxTokens = 512,
+    bool json = true,
+    String? system,
+    Object? jsonGrammar,
+    String? requestId,
+  }) {
+    calls++;
+    return super.generate(prompt: prompt, maxTokens: maxTokens);
+  }
 }
