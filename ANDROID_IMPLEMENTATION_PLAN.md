@@ -2,7 +2,7 @@
 
 October 9, 2026 (PHT) · branch `codex/kotlin-development`
 
-Status: Android model choices and frozen final speaker policy approved by Jeush. This is a documentation milestone; implementation, device verification, and submission remain pending. [PRD.md](PRD.md) defines the shared product and channel contract. This plan covers the complete Android delivery path and the Flutter integration work needed from Jairus; it does not select or implement the iOS runtime.
+Status: Android model choices and frozen final speaker policy approved by Jeush. Implementation has started on devS's feature branch; device verification and submission remain pending. [PRD.md](PRD.md) defines the shared product and channel contract; [ANDROID_WORK_SPLIT.md](ANDROID_WORK_SPLIT.md) assigns the Android backend work to devS and devJ. This plan covers the complete Android delivery path and the Flutter integration work needed from Jairus; it does not select or implement the iOS runtime.
 
 ## 1. Goal and approved decisions
 
@@ -99,9 +99,9 @@ All code paths are future files; M0 must adapt them to the actual Flutter shell.
 | Files/components | Owner | Responsibility |
 | --- | --- | --- |
 | `android/app/build.gradle.kts`, manifest, backup-rule XML, `.gitignore` | Sam | Pinned native dependencies, arm64 demo build, model packaging, offline/backup controls |
-| `android/app/src/main/kotlin/<package>/MainActivity.kt` | Jeush/Sam | Thin registration, permission and activity lifecycle forwarding |
-| `<package>/revise/ReviseEnginePlugin.kt` | Jeush/Sam | Method/EventChannel adapters, argument validation, one completion per method call |
-| `<package>/revise/EngineController.kt`, `EngineState.kt` | Jeush/Sam | Serialized transitions, session generation, resource ownership, flush barriers |
+| `android/app/src/main/kotlin/<package>/MainActivity.kt` | devS; devJ reviews capture hooks | Thin registration, permission and activity lifecycle forwarding |
+| `<package>/revise/ReviseEnginePlugin.kt` | devS | Method/EventChannel adapters, argument validation, one completion per method call |
+| `<package>/revise/EngineController.kt`, `EngineState.kt` | devS; devJ reviews flush behavior | Serialized transitions, session generation, resource ownership, flush barriers |
 | `<package>/revise/AudioCapture.kt` | Jeush | AudioRecord, mono PCM, bounded capture queue, actual microphone shutdown |
 | `<package>/revise/MoonshineEngine.kt` | Jeush | Local loading, streaming, line callbacks, pause/final flush |
 | `<package>/revise/CaptionAdapter.kt`, `SpeakerRegistry.kt` | Jeush | Immutable snapshots, stable IDs, unknown attribution, timestamp conversion |
