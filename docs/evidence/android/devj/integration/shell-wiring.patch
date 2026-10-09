@@ -1,0 +1,43 @@
+diff --git a/android/app/build.gradle.kts b/android/app/build.gradle.kts
+index 242cd08a2a8c48fadff012dd88b6459d44024514..fa6b10727aae31cba7ac6634aa3d425a4cd23599 100644
+--- a/android/app/build.gradle.kts
++++ b/android/app/build.gradle.kts
+@@ -47,3 +47,5 @@ kotlin {
+ flutter {
+     source = "../.."
+ }
++
++apply(from = "revise-backend.gradle")
+diff --git a/android/app/src/main/AndroidManifest.xml b/android/app/src/main/AndroidManifest.xml
+index 966e683c2700cbb63a87753c89d54dc2d25a1fa3..72760ff2aa9ab7552fb55ac3538839f644d7db48 100644
+--- a/android/app/src/main/AndroidManifest.xml
++++ b/android/app/src/main/AndroidManifest.xml
+@@ -1,9 +1,14 @@
+-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:tools="http://schemas.android.com/tools">
++    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+     <application
+         android:label="ReVise"
+         android:name="${applicationName}"
+-        android:icon="@mipmap/ic_launcher">
++        android:icon="@mipmap/ic_launcher"
++        android:allowBackup="false"
++        android:fullBackupContent="@xml/revise_backup_rules"
++        android:dataExtractionRules="@xml/revise_data_extraction_rules">
+         <activity
+             android:name=".MainActivity"
+             android:exported="true"
+diff --git a/android/app/src/main/kotlin/com/larpcode/revise/MainActivity.kt b/android/app/src/main/kotlin/com/larpcode/revise/MainActivity.kt
+index 1dacb4c243eaf0c71af799d1d59e6bbeb8b6aad9..6bdcd017d12675eb87579b54f4ee9564ade3c8a4 100644
+--- a/android/app/src/main/kotlin/com/larpcode/revise/MainActivity.kt
++++ b/android/app/src/main/kotlin/com/larpcode/revise/MainActivity.kt
+@@ -6,6 +6,7 @@ import io.flutter.embedding.engine.FlutterEngine
+ class MainActivity : FlutterActivity() {
+     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+         super.configureFlutterEngine(flutterEngine)
++        // Keep speech initialization unavailable until devJ's real factory is ready.
+         flutterEngine.plugins.add(ReviseEnginePlugin())
+     }
+ }

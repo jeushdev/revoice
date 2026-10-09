@@ -1,0 +1,2 @@
+# Preserve review-patch bytes and application behavior on Windows checkouts.
+*.patch text eol=lf
