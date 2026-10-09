@@ -57,6 +57,7 @@ final class CaptionTracker: @unchecked Sendable {
         guard isOpen else { return }
 
         let line = event.line
+        Self.logDiarization(event, line)
         let key = "\(run):\(line.lineId)"
         if finalized.contains(key) { return }            // duplicate final, or late speaker revision
 
@@ -120,6 +121,21 @@ final class CaptionTracker: @unchecked Sendable {
             "tStartMs": startMs,
             "tEndMs": endMs,
         ])
+    }
+
+    /// DEBUG only: raw speaker values straight from Moonshine, to debug diarization.
+    /// Filter the Xcode console by "REVISE-DIAR". Logs the event kind, IDs, timing and span
+    /// data but never the transcript text (PRD: no transcript content in logs).
+    private static func logDiarization(_ event: TranscriptEvent, _ line: TranscriptLine) {
+        #if DEBUG
+        let kind = String(describing: type(of: event))
+        let spans = line.speakerSpans.map {
+            "[id=\($0.speakerId % 100000) idx=\($0.speakerIndex) t=\(String(format: "%.2f", $0.startTime)) dur=\(String(format: "%.2f", $0.duration)) chars=\($0.startChar)-\($0.endChar)]"
+        }.joined(separator: " ")
+        NSLog("REVISE-DIAR %@ line=%llu complete=%d spansChanged=%d start=%.2f dur=%.2f textLen=%d spans(%d)=%@",
+              kind, line.lineId % 100000, line.isComplete ? 1 : 0, line.haveSpeakersChanged ? 1 : 0,
+              line.startTime, line.duration, line.text.count, line.speakerSpans.count, spans)
+        #endif
     }
 
     /// App speaker ID: Moonshine's `speakerIndex` (0 = first voice heard) + 1, so IDs are
