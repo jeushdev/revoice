@@ -187,4 +187,37 @@ void main() {
     expect(EngineEvent.fromMap({'type': 'speaker', 'segmentId': 's-0003'}), isNull);
     expect(EngineEvent.fromMap({'type': 'speaker', 'speakerId': 2}), isNull);
   });
+
+  CaptionEvent cap(String id, String text, int start, int end, {required int speaker, bool isFinal = true}) =>
+      CaptionEvent(segmentId: id, text: text, speakerId: speaker, isFinal: isFinal, tStartMs: start, tEndMs: end);
+
+  test('live: same speaker within 1 s and an unfinished line continues that line', () async {
+    engine.controller.add(cap('s-1', 'We track all our orders', 0, 2000, speaker: 1));
+    engine.controller.add(cap('s-2', 'in a', 2300, 2800, isFinal: false, speaker: 1));
+    await pump();
+    expect(session.finals, isEmpty); // the line is being extended (in progress)
+    expect(session.partials.single.text, 'We track all our orders in a');
+    engine.controller.add(cap('s-2', 'in a notebook.', 2300, 3600, speaker: 1));
+    await pump();
+    expect(session.finals.single.id, 's-1'); // one line, the first id
+    expect(session.finals.single.text, 'We track all our orders in a notebook.');
+    expect(session.finals.single.tEndMs, 3600);
+    // The finished sentence ends the line: the next one is a new line.
+    engine.controller.add(cap('s-3', 'And things get lost.', 4000, 5000, speaker: 1));
+    await pump();
+    expect(session.finals.map((l) => l.id), ['s-1', 's-3']);
+  });
+
+  test('live: other speaker, a gap of 1 s or more, or a finished sentence start a new line', () async {
+    engine.controller.add(cap('s-1', 'Hello there and', 0, 1000, speaker: 1));
+    engine.controller.add(cap('s-2', 'other voice', 1200, 1900, speaker: 2)); // another speaker
+    engine.controller.add(cap('s-3', 'much later', 3000, 3500, speaker: 2)); // other speaker's line was unfinished, gap 1.1 s
+    await pump();
+    expect(session.finals.map((l) => l.id), ['s-1', 's-2', 's-3']);
+    engine.controller.add(cap('s-4', 'Done.', 3600, 4000, speaker: 2)); // continues s-3 (unfinished, 0.1 s)
+    engine.controller.add(cap('s-5', 'next', 4200, 4600, speaker: 2)); // the line now ends with a period
+    await pump();
+    expect(session.finals.map((l) => l.id), ['s-1', 's-2', 's-3', 's-5']);
+    expect(session.finals[2].text, 'much later Done.');
+  });
 }

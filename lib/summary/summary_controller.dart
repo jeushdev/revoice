@@ -16,6 +16,7 @@ import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
 import '../engine/llm_lock.dart';
 import '../session/name_rules.dart';
+import '../transcript/clean_transcript.dart' show MergeLine, capitalizeFirst, mergeFragments, stripFillers;
 import '../session/session_controller.dart';
 
 enum SummaryStep { reading, matching, summarizing, suggesting }
@@ -210,7 +211,7 @@ class SummaryController extends ChangeNotifier {
   /// One answer: the model's text, kept only when lines of the conversation support it.
   Future<({bool found, String? answer, List<String> sources})> _answerFor(String question) async {
     const notFound = (found: false, answer: null, sources: <String>[]);
-    final lineText = {for (final l in session.finals) l.id: l.text};
+    final lineText = {for (final t in _turns()) t.id: t.text}; // turn id -> text
     final known = _knownText();
     // The conversation never uses any word of the question: say so without asking the model.
     if (nothingToAnswerFrom(question, known)) return notFound;
@@ -437,28 +438,55 @@ class SummaryController extends ChangeNotifier {
 
   // --- Prompts (in Dart so both platforms behave the same) ---
 
-  /// Most recent lines that fit the budget, as "[id] Name: text".
+  /// The conversation as merged turns (the same merge rules and clean-up as the Clean transcript
+  /// view): fragments of one thought become one line, with um/uh removed and a capital first
+  /// letter. Each turn is identified by its first segment id. Speakers are the CURRENT labels.
+  List<({String id, int speakerId, String text})> _turns() {
+    final merged = mergeFragments([
+      for (final l in session.finals)
+        MergeLine(
+          id: l.id,
+          speakerId: session.speakerOf(l),
+          text: l.text,
+          tStartMs: l.tStartMs,
+          tEndMs: l.tEndMs,
+        ),
+    ]);
+    return [
+      for (final t in merged)
+        (
+          id: t.id,
+          speakerId: t.speakerId,
+          text: () {
+            final ruled = capitalizeFirst(stripFillers(t.rawText));
+            return ruled.isEmpty ? t.rawText : ruled;
+          }(),
+        ),
+    ];
+  }
+
+  /// Most recent turns that fit the budget, as "[id] Name: text".
   String _transcriptText({bool rawLabels = false}) {
-    final lines = session.finals;
-    var kept = lines;
+    final turns = _turns();
+    var kept = turns;
     var chars = 0;
     truncated = false;
-    for (var i = lines.length - 1; i >= 0; i--) {
-      chars += lines[i].text.length + 24;
+    for (var i = turns.length - 1; i >= 0; i--) {
+      chars += turns[i].text.length + 24;
       if (chars / 4 > maxInputTokens) {
-        kept = lines.sublist(i + 1);
+        kept = turns.sublist(i + 1);
         truncated = true;
         break;
       }
     }
     return kept
-        .map((s) {
-          final who = s.speakerId == 0
+        .map((t) {
+          final who = t.speakerId == 0
               ? 'Unknown'
               : rawLabels
-              ? 'Speaker ${s.speakerId}'
-              : session.displayName(s.speakerId);
-          return '[${s.id}] $who: ${s.text}';
+              ? 'Speaker ${t.speakerId}'
+              : session.displayName(t.speakerId);
+          return '[${t.id}] $who: ${t.text}';
         })
         .join('\n');
   }

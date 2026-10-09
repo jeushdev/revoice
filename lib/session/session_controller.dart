@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
 import '../engine/platform_caption_engine.dart';
+import '../transcript/clean_transcript.dart' show endsSentence, maxMergeGapMs, maxMergeWords;
 import 'name_rules.dart';
 import 'speaker_suggestions.dart';
 
@@ -202,6 +203,9 @@ class SessionController extends ChangeNotifier {
 
   Future<void> start() async {
     _segments.clear();
+    _continuations.clear();
+    _continuationDone.clear();
+    _textBeforeContinuation.clear();
     speakerNames.clear();
     liveSpeakerOverride = null;
     _suggestionsApplied = false;
@@ -304,8 +308,24 @@ class SessionController extends ChangeNotifier {
     if (state != EngineState.listening && state != EngineState.paused) {
       return; // late events from a stopped session never leak in
     }
+    // A new line that just continues the previous one (same speaker, under 1 s later, previous
+    // line not finished) is appended to it instead of starting a new line.
+    final base = _continuations[e.segmentId];
+    if (base != null) {
+      if (_continuationDone.contains(e.segmentId)) return;
+      _extendLine(base, e);
+      return;
+    }
     final existing = _segments[e.segmentId];
     if (existing != null && existing.isFinal) return; // finals never change
+    if (existing == null) {
+      final prev = _lineToContinue(e);
+      if (prev != null) {
+        _continuations[e.segmentId] = prev;
+        _extendLine(prev, e);
+        return;
+      }
+    }
     final seg =
         existing ??
         (_segments[e.segmentId] = Segment(
@@ -324,6 +344,38 @@ class SessionController extends ChangeNotifier {
       ..tEndMs = e.tEndMs
       ..isFinal = e.isFinal;
     if (e.isFinal) _applyNameRules(seg);
+  }
+
+  /// Segment id of a continuation -> the line it was appended to.
+  final Map<String, Segment> _continuations = {};
+  final Set<String> _continuationDone = {};
+  final Map<String, String> _textBeforeContinuation = {};
+
+  Segment? _lineToContinue(CaptionEvent e) {
+    if (liveSpeakerOverride == null && e.speakerId == 0) return null;
+    if (_segments.values.any((s) => !s.isFinal)) return null; // something is still being said
+    final lines = finals;
+    if (lines.isEmpty) return null;
+    final prev = lines.last;
+    final speaker = liveSpeakerOverride ?? e.speakerId;
+    if (speakerOf(prev) != speaker) return null;
+    if (e.tStartMs - prev.tEndMs >= maxMergeGapMs) return null;
+    if (endsSentence(prev.text)) return null;
+    final words = prev.text.split(RegExp(r'\s+')).length + e.text.split(RegExp(r'\s+')).length;
+    return words < maxMergeWords ? prev : null;
+  }
+
+  /// The line grows by the continuation's words; it is in progress (grey) until that finishes.
+  void _extendLine(Segment base, CaptionEvent e) {
+    final before = _textBeforeContinuation.putIfAbsent(e.segmentId, () => base.text);
+    base
+      ..text = '$before ${e.text}'.trim()
+      ..tEndMs = e.tEndMs
+      ..isFinal = e.isFinal;
+    if (e.isFinal) {
+      _continuationDone.add(e.segmentId);
+      _applyNameRules(base);
+    }
   }
 
   /// Moonshine changed its mind about who spoke a line. The original [Segment.speakerId] is

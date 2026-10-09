@@ -281,12 +281,12 @@ actor ReviseEngine {
             TranscriberOption(name: "diarization_analyze_cadence", value: "0.5"),
             // Line grouping. Moonshine has no "minimum silence" option; the voice detector averages its
             // speech probability over `vad_window_duration` seconds (default 0.5) and ends a line when
-            // that average drops below 0.5, i.e. after roughly half a window of silence. 1.6 s means
-            // about 0.8 s of silence before a line ends (was ~0.25 s), so pauses mid-thought no longer
+            // that average drops below 0.5, i.e. after roughly half a window of silence. 2.0 s means
+            // about 1.0 s of silence before a line ends (was ~0.25 s), so pauses mid-thought no longer
             // split lines. The same average delays the START of a line by about the same amount, so the
             // audio kept from before the detected start grows from 8192 samples (0.5 s) to 24000 (1.5 s)
             // so the first words are not cut off.
-            TranscriberOption(name: "vad_window_duration", value: "1.6"),
+            TranscriberOption(name: "vad_window_duration", value: "2.0"),
             TranscriberOption(name: "vad_look_behind_sample_count", value: "24000"),
         ]
         do {

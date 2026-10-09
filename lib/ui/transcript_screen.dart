@@ -42,8 +42,8 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
   /// 0 Summary, 1 Transcript.
   int _tab = 0;
 
-  /// Original is the default: it is authoritative and needs no model.
-  bool _clean = false;
+  /// Clean (merged turns, no model) is the default; Original is one tap away.
+  bool _clean = true;
 
   /// Lines a summary answer pointed to; tinted briefly in the transcript.
   Set<String> _highlight = const {};
