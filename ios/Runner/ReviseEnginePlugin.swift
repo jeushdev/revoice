@@ -36,6 +36,7 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   }
 
   static func register(with registrar: FlutterPluginRegistrar) {
+    startMainThreadWatchdog()
     let instance = ReviseEnginePlugin()
     let methods = FlutterMethodChannel(
       name: "revise/engine", binaryMessenger: registrar.messenger())
@@ -151,4 +152,34 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       message: "\(method) is not allowed while \(state?.rawValue ?? "uninitialized").",
       details: nil)
   }
+
+  /// DEBUG only: pings the main thread every 100 ms from a background queue and logs
+  /// "REVISE-STALL" when it answers more than 300 ms late, i.e. when the UI is frozen.
+  private static func startMainThreadWatchdog() {
+    #if DEBUG
+    let queue = DispatchQueue(label: "revise.watchdog", qos: .utility)
+    let timer = DispatchSource.makeTimerSource(queue: queue)
+    var pingSentAt: Date?
+    timer.schedule(deadline: .now() + 1, repeating: .milliseconds(100))
+    timer.setEventHandler {
+      if let sent = pingSentAt {
+        let late = Int(Date().timeIntervalSince(sent) * 1000)
+        if late > 300 { NSLog("REVISE-STALL main thread unresponsive for %d ms (still blocked)", late) }
+        return  // previous ping not answered yet
+      }
+      pingSentAt = Date()
+      DispatchQueue.main.async {
+        queue.async {
+          if let sent = pingSentAt, Date().timeIntervalSince(sent) > 0.3 {
+            NSLog("REVISE-STALL main thread was blocked for %d ms", Int(Date().timeIntervalSince(sent) * 1000))
+          }
+          pingSentAt = nil
+        }
+      }
+    }
+    timer.resume()
+    watchdog = timer
+    #endif
+  }
+  private static var watchdog: DispatchSourceTimer?
 }

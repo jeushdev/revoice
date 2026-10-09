@@ -97,10 +97,12 @@ actor ReviseEngine {
     /// Pause = stop the mic, which makes Moonshine flush any speech in progress as final.
     func pause() throws {
         guard state == .listening, let mic else { throw Self.invalidState("pause") }
+        let started = Date()
         try? mic.stop()
         tracker?.flushPendingAsFinal()
         pausedAt = Date()
         setState(.paused)
+        Self.logTiming("pause flush", since: started)
     }
 
     func resume() async throws {
@@ -129,21 +131,40 @@ actor ReviseEngine {
         default:
             throw Self.invalidState("stop")
         }
-        _ = stopRecording()
+        // Only the flush has to finish before we answer Flutter. Freeing the models (slow,
+        // ~140 MB) happens right after the reply, as the next job on this actor, so it still
+        // runs before any later `start` can reload them.
+        let started = Date()
+        _ = stopRecording(releasingModels: false)
         setState(.stopped)
+        Self.logTiming("stop flush", since: started)
+        Task { await self.releaseModelsAfterStop() }
+    }
+
+    private func releaseModelsAfterStop() {
+        guard state == .stopped else { return }   // a newer session already owns the models
+        let started = Date()
+        releaseSTT()
+        Self.logTiming("stop release models", since: started)
+    }
+
+    private static func logTiming(_ what: String, since start: Date) {
+        #if DEBUG
+        NSLog("REVISE-TIMING %@ took %d ms", what, Int(Date().timeIntervalSince(start) * 1000))
+        #endif
     }
 
     // MARK: - Internals
 
     /// Stops the mic, flushes, closes the tracker, and releases STT. Returns nothing useful;
     /// callers set the next state themselves.
-    private func stopRecording() -> Bool {
+    private func stopRecording(releasingModels: Bool = true) -> Bool {
         try? mic?.stop()                    // Moonshine emits final events for pending speech
         tracker?.flushPendingAsFinal()      // belt and braces: nothing stays partial
         tracker?.close()
         tracker = nil
         pausedAt = nil
-        releaseSTT()
+        if releasingModels { releaseSTT() }
         return true
     }
 
