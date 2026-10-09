@@ -77,8 +77,9 @@ class SessionController extends ChangeNotifier {
   int speakerOf(Segment s) =>
       s.manualSpeakerId ?? (useSuggestions ? s.suggestedSpeakerId : null) ?? s.speakerId;
 
-  /// Whether post-Stop speaker suggestions are shown (the original labels are always kept).
-  bool useSuggestions = true;
+  /// Whether post-Stop speaker suggestions are shown. OFF by default: they are a rough guess
+  /// offered only when the audio gave no speakers at all; the original labels are always kept.
+  bool useSuggestions = false;
 
   /// True when Stop found the voices were not separated and suggested labels from turn-taking
   /// and names (see speaker_suggestions.dart).
@@ -104,10 +105,8 @@ class SessionController extends ChangeNotifier {
     result.names.forEach((id, name) {
       _namesSuggested.putIfAbsent(id, () => SpeakerName(name, NameSource.auto));
     });
-    speakerNames
-      ..clear()
-      ..addAll(_namesSuggested);
-    useSuggestions = true;
+    // Offered, not applied: labels and names change only when the user turns the switch on.
+    useSuggestions = false;
     _suggestionsApplied = true;
   }
 
@@ -190,7 +189,7 @@ class SessionController extends ChangeNotifier {
     speakerNames.clear();
     liveSpeakerOverride = null;
     _suggestionsApplied = false;
-    useSuggestions = true;
+    useSuggestions = false;
     _pendingCall = null;
     interrupted = false;
     errorMessage = null;

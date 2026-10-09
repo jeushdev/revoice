@@ -134,10 +134,11 @@ class _SuggestionBanner extends StatelessWidget {
       child: SwitchListTile(
         value: session.useSuggestions,
         onChanged: session.setUseSuggestions,
-        title: const Text('Suggested speaker labels'),
+        title: const Text('Guess who said what'),
         subtitle: const Text(
-          'The audio could not tell the voices apart, so these labels come from '
-          'turn-taking and names. The original labels are kept. Tap a line to fix one.',
+          'The audio gave no speaker labels. Turn this on for a rough guess from '
+          'turn-taking and names (it can be wrong). Your original labels are kept. '
+          'Tap a line to fix one.',
         ),
       ),
     );

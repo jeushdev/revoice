@@ -3,11 +3,11 @@ import 'package:revise/session/speaker_suggestions.dart';
 
 List<SuggestionLine> _all1(List<String> texts) => [
   for (var i = 0; i < texts.length; i++)
-    SuggestionLine('s-${(i + 1).toString().padLeft(4, '0')}', texts[i], i == 0 ? 0 : 1),
+    SuggestionLine('s-${(i + 1).toString().padLeft(4, '0')}', texts[i], 0),
 ];
 
 void main() {
-  test('interview collapsed to one speaker is split by questions, replies and names', () {
+  test('interview with no speaker labels at all is split by questions, replies and names', () {
     final lines = _all1([
       "Hi, I'm David.",
       "Hi David, my name's John. Nice to meet you.",
@@ -60,5 +60,27 @@ void main() {
     expect(s.speakers['s-0001'], 1);
     expect(s.speakers['s-0002'], 2);
     expect(s.names[1], 'Maria');
+  });
+
+  test('Unknown lines plus even one real speaker label: Moonshine labels are left alone', () {
+    final lines = [
+      const SuggestionLine('s-0001', "Hi, I'm John.", 0),
+      const SuggestionLine('s-0002', "Yo what's up johnny", 2),
+      const SuggestionLine('s-0003', "I'm gonna ask about your business.", 2),
+      const SuggestionLine('s-0004', 'Sure, go ahead.', 0),
+    ];
+    expect(suggestSpeakers(lines), isNull);
+  });
+
+  test('a line that addresses someone by name (even a nickname) is never assigned to them', () {
+    final s = suggestSpeakers(_all1([
+      "Hi, I'm John.",
+      "Yo what's up johnny",
+      "I'm gonna ask about your business.",
+      'Thanks, John. Let me think.',
+    ]))!;
+    expect(s.speakers['s-0001'], 1); // John introduces himself
+    expect(s.speakers['s-0002'], 2, reason: 'addressed TO johnny, so not John');
+    expect(s.speakers['s-0004'], 2, reason: '"Thanks, John" is said to John');
   });
 }

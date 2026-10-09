@@ -127,10 +127,10 @@ Future<String> generate({required String prompt, int maxTokens = 512, String? sy
 1. **Faster diarization.** Moonshine's clustering threshold is compiled in (no option). We set `diarization_cluster_cadence=1.0`
    and `diarization_analyze_cadence=0.5` so speakers appear sooner (two-voice test: Unknown lines 2 -> 1, labels followed the real
    alternation). If live captions lag on a phone, put them back to 2.0 / 0 in `ReviseEngine.loadSTT`.
-2. **Suggested labels at Stop (`lib/session/speaker_suggestions.dart`).** Only when Moonshine gave at most one speaker for the whole
-   conversation. Turn-taking cues (question -> answer by the other person, "Sure/Thanks/Hi/That sounds..." replies) plus names ("I'm X",
-   "my name's X", "Thanks, X" = said to X). Shown with an on/off switch on the transcript, originals kept, applied inside
-   `SessionController.stop()` so CRM cards use it. It is a 2-person heuristic, not a model.
+2. **Optional guess at Stop (`lib/session/speaker_suggestions.dart`).** Offered ONLY when Moonshine gave no speaker for any line
+   (every line Unknown), and OFF by default: the transcript shows a "Guess who said what" switch. If even one line has a real label,
+   nothing is offered, because a phone test showed the guess overriding good audio labels made things worse. It uses turn-taking cues
+   and names, and a line that talks TO a person ("Yo what's up johnny", "Thanks, John") is never assigned to them. Originals are kept.
    **An LLM was tried and rejected:** Qwen 2.5 1.5B scored 5/14 (just alternates A/B) and 7/14 on per-line change flags; asked
    "same or different person?" for adjacent lines it answered "different" every time. A bigger model (3B, only for the 6 GB iPhone 14 Pro Max)
    might work but was not tested; `CaptionEngine.generate()` is in place if you want to try.

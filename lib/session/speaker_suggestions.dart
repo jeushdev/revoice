@@ -1,7 +1,8 @@
 /// Post-Stop speaker suggestions from turn-taking cues and names (PRD F3 safety net).
 ///
-/// Used only when the audio could not tell the voices apart (Moonshine gave at most one
-/// speaker for the whole conversation). It is a heuristic for 2-person conversations, not
+/// Used only when the audio gave NO speakers at all (every line Unknown). If Moonshine
+/// labelled even one line, its labels are kept: a phone test showed that overriding a mix of
+/// Unknown + real labels made things worse. It is a heuristic for 2-person conversations, not
 /// a model: it is shown as "suggested", the original labels are kept, and the user can
 /// switch it off or fix single lines. (A 1.5B on-device LLM was tried for this and scored
 /// at chance level, so it is not used.)
@@ -53,12 +54,25 @@ String? _greetedName(String text) {
   return null;
 }
 
+/// True if [text] mentions [name] (or a nickname such as "johnny" for "John") without being the
+/// person introducing themselves. Mentioning someone means talking to or about them.
+bool _addressesSpeaker(String text, String? name, String? selfIntro) {
+  if (name == null || name.length < 3) return false;
+  if (selfIntro != null && selfIntro.toLowerCase() == name.toLowerCase()) return false;
+  final lower = name.toLowerCase();
+  for (final m in RegExp(r"[a-z][a-z'’\-]*", caseSensitive: false).allMatches(text)) {
+    final word = m.group(0)!.toLowerCase();
+    if (word == lower || (word.startsWith(lower) && word.length <= lower.length + 3)) return true;
+  }
+  return false;
+}
+
 /// Returns suggestions, or null when there is nothing to suggest (the voices were already
 /// separated, too few lines, or not a conversation this heuristic can describe).
 SpeakerSuggestion? suggestSpeakers(List<SuggestionLine> lines) {
   if (lines.length < 4) return null;
-  final distinct = {for (final l in lines) if (l.speakerId != 0) l.speakerId};
-  if (distinct.length >= 2) return null; // Moonshine (or the user) already told voices apart
+  // Any real label from Moonshine (or the user) means we leave the audio's answer alone.
+  if (lines.any((l) => l.speakerId != 0)) return null;
 
   final speakers = <String, int>{};
   final intro = <int, String>{}; // speaker -> name they said about themselves
@@ -80,12 +94,10 @@ SpeakerSuggestion? suggestSpeakers(List<SuggestionLine> lines) {
         if (known != null && known.toLowerCase() != self.toLowerCase()) change = true;
         if (known != null && known.toLowerCase() == self.toLowerCase()) change = false;
       }
-      final to = _greetedName(text);
-      if (to != null) {
-        // Said TO someone, so not by that person.
-        if (intro[current]?.toLowerCase() == to.toLowerCase()) change = true;
-      }
       if (change) current = current == 1 ? 2 : 1;
+      // A line that talks TO a person ("Yo what's up johnny", "Thanks, John") is not said by that
+      // person. This beats every other cue.
+      if (_addressesSpeaker(text, intro[current], self)) current = current == 1 ? 2 : 1;
     }
     speakers[lines[i].id] = current;
 

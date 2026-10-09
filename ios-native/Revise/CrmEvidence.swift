@@ -72,11 +72,28 @@ enum CrmEvidence {
         if card["contact_mentioned"] is String, sources["contact_mentioned"] == nil {
             card["contact_mentioned"] = NSNull()      // unsupported contact details are removed outright
         }
-        for (i, topic) in ((card["topics"] as? [Any]) ?? []).enumerated() {
+        // `lines` are only THIS person's lines (Dart sends one speaker's lines per card), so a topic
+        // or commitment is kept only if one of them states it; anything else (another person's
+        // words, or invented) is removed here instead of being left for Dart to discard.
+        let topics = ((card["topics"] as? [Any]) ?? []).filter {
+            ($0 as? String).flatMap { find($0, in: lines) } != nil
+        }
+        card["topics"] = topics
+        for (i, topic) in topics.enumerated() {
             cite("topics[\(i)]", topic)
         }
-        for (i, item) in ((card["commitments"] as? [Any]) ?? []).enumerated() {
-            guard let commitment = item as? [String: Any] else { continue }
+        var commitments: [[String: Any]] = []
+        for item in (card["commitments"] as? [Any]) ?? [] {
+            guard var commitment = item as? [String: Any],
+                let what = commitment["what"] as? String, find(what, in: lines) != nil
+            else { continue }
+            if let due = commitment["due"] as? String, find(due, in: lines) == nil {
+                commitment["due"] = NSNull()          // a deadline nobody in these lines stated
+            }
+            commitments.append(commitment)
+        }
+        card["commitments"] = commitments
+        for (i, commitment) in commitments.enumerated() {
             cite("commitments[\(i)].what", commitment["what"])
             cite("commitments[\(i)].due", commitment["due"])
         }

@@ -100,7 +100,7 @@ void main() {
     expect(session.knownSpeakers, [1, 2]);
   });
 
-  test('Stop suggests labels when diarization collapsed; originals kept; toggle restores them', () async {
+  test('no speaker labels at all: Stop OFFERS a guess (default off); originals kept; switch applies it', () async {
     const talk = [
       "Hi, I'm David.",
       "Hi David, my name's John. Nice to meet you.",
@@ -110,31 +110,45 @@ void main() {
       'About twelve people.',
     ];
     for (var i = 0; i < talk.length; i++) {
-      engine.caption('s-000${i + 1}', talk[i], 1); // Moonshine says speaker 1 for everything
+      engine.caption('s-000${i + 1}', talk[i], 0); // Moonshine gave no speaker at all
       await pump();
     }
     await session.stop();
 
     expect(session.hasSuggestions, isTrue);
+    expect(session.useSuggestions, isFalse, reason: 'off by default');
+    expect(session.finals.every((s) => session.speakerOf(s) == 0), isTrue, reason: 'nothing applied yet');
+    expect(session.finals.every((s) => s.suggestedSpeakerId != null), isTrue);
+
+    session.setUseSuggestions(true);
     expect(session.finals.map(session.speakerOf).toSet(), {1, 2});
-    expect(session.finals.every((s) => s.speakerId == 1), isTrue, reason: 'originals untouched');
+    expect(session.finals.every((s) => s.speakerId == 0), isTrue, reason: 'originals untouched');
     expect(session.displayName(1), 'David');
     expect(session.displayName(2), 'John');
 
     session.setUseSuggestions(false);
-    expect(session.finals.map(session.speakerOf).toSet(), {1});
-    expect(session.knownSpeakers, [1]);
+    expect(session.knownSpeakers, isEmpty);
+  });
 
-    session.setUseSuggestions(true);
-    expect(session.knownSpeakers, [1, 2]);
+  test('Unknown lines plus a real speaker: no suggestions are offered at all', () async {
+    engine.caption('s-0001', "Hi, I'm John.", 0);
+    await pump();
+    for (var i = 2; i <= 5; i++) {
+      engine.caption('s-000$i', ['', 'Hey there.', 'How are you?', 'Fine.', 'Good.'][i - 1], 2);
+      await pump();
+    }
+    await session.stop();
+    expect(session.hasSuggestions, isFalse);
+    expect(session.finals.first.speakerId, 0);
   });
 
   test('a manual rename survives toggling suggestions', () async {
     for (var i = 0; i < 4; i++) {
-      engine.caption('s-000${i + 1}', ['Hello there.', 'Hi, how are you?', 'Fine, thanks.', 'Good to hear.'][i], 1);
+      engine.caption('s-000${i + 1}', ['Hello there.', 'Hi, how are you?', 'Fine, thanks.', 'Good to hear.'][i], 0);
       await pump();
     }
     await session.stop();
+    session.setUseSuggestions(true);
     session.rename(2, 'Priya');
     session.setUseSuggestions(false);
     session.setUseSuggestions(true);
