@@ -269,6 +269,13 @@ actor ReviseEngine {
         let options = [
             TranscriberOption(name: "identify_speakers", value: "true"),
             TranscriberOption(name: "diarization_model_dir", value: diarizationDir.path),
+            // Re-cluster speakers every 1.0 s (default 2.0) and analyze audio every 0.5 s (default 1.0).
+            // Moonshine's clustering threshold itself is compiled in and cannot be changed; these only
+            // make speakers appear sooner. On the two-voice test recording this turned the label sequence
+            // [1,0,0,1,1,2,1,1,1,2,1] into [1,0,1,2,1,2,1,2,1,2,1]. Costs a little more CPU: if live
+            // captions lag on the phone, set these back to "2.0" and "0".
+            TranscriberOption(name: "diarization_cluster_cadence", value: "1.0"),
+            TranscriberOption(name: "diarization_analyze_cadence", value: "0.5"),
         ]
         do {
             // Loading from local paths: no network involved.
