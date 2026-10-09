@@ -74,7 +74,7 @@ actor ReviseEngine {
         return ["sttReady": false, "llmReady": llmReady]
     }
 
-    func start(language: String) async throws {
+    func start(language: String, keyterms: [String] = []) async throws {
         guard state == .ready || state == .stopped else { throw Self.invalidState("start") }
         guard language == "en" else {
             throw ReviseError(code: .modelMissing, message: "Only English is supported in v1")
@@ -85,6 +85,9 @@ actor ReviseEngine {
         try await ensureMicPermission()
         try await loadSTT()  // reloads after a previous stop released the models
         guard let mic else { throw ReviseError(code: .modelMissing, message: "Speech model not loaded") }
+        // Names typed before recording help Moonshine spell them. A failure here must never stop
+        // the recording, so it is only logged.
+        NSLog("REVISE-KEYTERMS %@", mic.setKeyterms(keyterms))
 
         let tracker = CaptionTracker(
             emit: sendEvent,

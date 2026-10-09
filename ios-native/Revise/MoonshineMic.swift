@@ -35,6 +35,24 @@ final class MoonshineMic: @unchecked Sendable {
         self.updateInterval = updateInterval
     }
 
+    // MARK: - Names to listen for
+
+    /// Biases the decoder towards these spellings (names entered before recording). Commas are
+    /// not allowed inside a term, and the list is capped. An empty list clears the previous
+    /// session's terms. Never throws: returns a short description of what happened for the log.
+    @discardableResult
+    func setKeyterms(_ names: [String]) -> String {
+        let terms = Array(Set(names.map {
+            $0.replacingOccurrences(of: ",", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        }.filter { !$0.isEmpty })).sorted().prefix(20)
+        do {
+            try transcriber.setKeyterms(Array(terms))
+            return "ok (\(terms.count) terms)"
+        } catch {
+            return "failed: \(error.localizedDescription)"
+        }
+    }
+
     // MARK: - Session
 
     /// Creates a fresh stream for a new session and attaches the listener.

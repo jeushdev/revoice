@@ -165,7 +165,7 @@ void main() {
     expect(summary.status, SummaryStatus.done);
     expect(summary.summary, 'Short recap.');
     expect(session.displayName(1), 'Zairus'); // Mallory is not on the list
-    expect(session.displayName(2), 'Sam'); // first use of the name wins
+    expect(session.displayName(2), 'Jeush'); // model said Sam, but speaker 2 never said so: no guessing
     expect(session.displayName(3), 'Sam'); // heard live, kept
     expect(session.speakerNames[3]!.source, NameSource.auto);
     expect(summary.questions.map((q) => q.text), ['Who took part?']);
@@ -247,6 +247,31 @@ void main() {
     expect(first, isNotNull);
     session.rename(1, 'Boss'); // rename also counts
     expect(summary.stale, isTrue);
+    summary.dispose();
+  });
+
+  test('a model name match without evidence in the conversation is ignored (no guessing)', () async {
+    final session = SessionController(
+      ScriptedLlm({
+        'match_speakers': '{"speakers": {"1": "Anna", "2": "Mark"}}',
+        'summary': '{"summary": "A chat."}',
+        'questions': '{"questions": ["What was it about?"]}',
+      }),
+    )..expectedNames = ['Anna', 'Mark'];
+    for (var i = 0; i < 4; i++) {
+      session.debugAddFinal(Segment(
+        id: 's-000${i + 1}',
+        text: ['Hello there.', 'Hi, how are you?', 'Fine, thanks.', 'Good to hear.'][i],
+        speakerId: i.isEven ? 1 : 2,
+        isFinal: true,
+        tStartMs: i * 3000,
+        tEndMs: i * 3000 + 2000,
+      ));
+    }
+    final summary = SummaryController(session.engine, session);
+    await summary.run();
+    expect(session.speakerNames, isEmpty); // nobody introduced themselves: stay "Speaker N"
+    expect(session.displayName(1), 'Speaker 1');
     summary.dispose();
   });
 }

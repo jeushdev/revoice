@@ -65,9 +65,11 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     case "init":
       run(result) { await self.engine.initialize() }
     case "start":
-      let language = (call.arguments as? [String: Any])?["language"] as? String ?? "en"
+      let args = call.arguments as? [String: Any]
+      let language = args?["language"] as? String ?? "en"
+      let keyterms = (args?["keyterms"] as? [Any])?.compactMap { $0 as? String } ?? []
       run(result) {
-        try await self.engine.start(language: language)
+        try await self.engine.start(language: language, keyterms: keyterms)
         return true
       }
     case "pause":

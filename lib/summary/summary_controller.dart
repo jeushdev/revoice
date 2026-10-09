@@ -15,6 +15,7 @@ import '../ai/meeting_parsing.dart'
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
 import '../engine/llm_lock.dart';
+import '../session/name_rules.dart';
 import '../session/session_controller.dart';
 
 enum SummaryStep { reading, matching, summarizing, suggesting }
@@ -279,8 +280,29 @@ class SummaryController extends ChangeNotifier {
       // Only names from the list, only real speakers, each name once.
       if (id == null || !known.contains(id) || name == null) continue;
       if (!used.add(name)) continue;
+      // Don't guess: a name from the list is applied only when the conversation backs it up.
+      // Anything else stays "Speaker N" for the user to rename.
+      if (!_corroborated(id, name)) continue;
       session.suggestName(id, name);
     }
+  }
+
+  /// True when speaker [id] introduced themselves as [name] ("I'm Anna"), or someone else
+  /// addressed [name] in the line just before this speaker answered ("Anna, can you...?").
+  bool _corroborated(int id, String name) {
+    final lines = session.finals;
+    final wanted = name.toLowerCase();
+    for (var i = 0; i < lines.length; i++) {
+      if (session.speakerOf(lines[i]) != id) continue;
+      if (selfIntroName(lines[i].text)?.toLowerCase() == wanted) return true;
+      if (i == 0) continue;
+      final before = lines[i - 1];
+      if (session.speakerOf(before) != id &&
+          calledName(before.text)?.toLowerCase() == wanted) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _summarize() async {

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
+import '../engine/platform_caption_engine.dart';
 import 'name_rules.dart';
 import 'speaker_suggestions.dart';
 
@@ -213,6 +214,9 @@ class SessionController extends ChangeNotifier {
     _clock
       ..stop()
       ..reset();
+    // Names entered before recording go to the speech model as key terms.
+    final e = engine;
+    if (e is PlatformCaptionEngine) e.keyterms = expectedNames.toList();
     await _guard(() => engine.start());
     if (lastErrorCode == null) {
       startedAt = DateTime.now();

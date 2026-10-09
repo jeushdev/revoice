@@ -25,9 +25,13 @@ class PlatformCaptionEngine implements CaptionEngine {
     );
   }
 
+  /// Names to bias the speech model towards for the NEXT start (set by SessionController from the
+  /// names typed before recording). Not part of [CaptionEngine] so other engines are unaffected.
+  List<String> keyterms = const [];
+
   @override
   Future<void> start({String language = 'en'}) =>
-      _call<bool>('start', {'language': language});
+      _call<bool>('start', {'language': language, 'keyterms': keyterms});
 
   @override
   Future<void> pause() => _call<bool>('pause');
