@@ -26,6 +26,7 @@
 		BD6ABB45A662573DB3116BF0 /* ReviseGrammars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DF684E6372CBF02ECFBEC8D /* ReviseGrammars.swift */; };
 		C7083A5E0202AADA6D42F97A /* LlamaRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C61EF128BDC18E2A666872BB /* LlamaRunner.swift */; };
 		CC2713A2F5972891C332A8C1 /* ReviseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C989B8F49E6194DA5CDE244 /* ReviseEngine.swift */; };
+		FFA2143C05B25D9839FEE207 /* CrmEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20F07C35B877741EC1C7EBFD /* CrmEvidence.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -55,6 +56,7 @@
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		1DF684E6372CBF02ECFBEC8D /* ReviseGrammars.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ReviseGrammars.swift; path = "../ios-native/Revise/ReviseGrammars.swift"; sourceTree = SOURCE_ROOT; };
+		20F07C35B877741EC1C7EBFD /* CrmEvidence.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CrmEvidence.swift; path = "../ios-native/Revise/CrmEvidence.swift"; sourceTree = SOURCE_ROOT; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
 		331C8081294A63A400263BE5 /* RunnerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RunnerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; name = AppFrameworkInfo.plist; path = Flutter/AppFrameworkInfo.plist; sourceTree = "<group>"; };
@@ -152,6 +154,7 @@
 				FA96522C70E0D96C07124CE7 /* MoonshineMic.swift */,
 				C61EF128BDC18E2A666872BB /* LlamaRunner.swift */,
 				1DF684E6372CBF02ECFBEC8D /* ReviseGrammars.swift */,
+				20F07C35B877741EC1C7EBFD /* CrmEvidence.swift */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -324,6 +327,7 @@
 				37A2608AF6BAC85C4AED2B14 /* MoonshineMic.swift in Sources */,
 				C7083A5E0202AADA6D42F97A /* LlamaRunner.swift in Sources */,
 				BD6ABB45A662573DB3116BF0 /* ReviseGrammars.swift in Sources */,
+				FFA2143C05B25D9839FEE207 /* CrmEvidence.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

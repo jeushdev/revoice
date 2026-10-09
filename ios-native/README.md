@@ -58,9 +58,26 @@ Models/llm/*.gguf             (later)
   later requests and is freed before the next `start`. Requests run one at a time and only in state `stopped`.
 - Model file: `Models/llm/*.gguf` (first by name). Switch models with `LLM=0.5b|1.5b|3b sh ios-native/fetch-models.sh`
   (delete the old .gguf first). 0.5b if the iPhone 13 runs out of memory; 3b only for the 6 GB iPhone 14 Pro Max.
-- Logs: filter the Xcode console by `REVISE-LLM` (load time, free memory, prompt and generation tokens/sec).
-- The CRM system prompt contains a worked example. Without it the 1.5B model returned an empty `source_segments`,
-  which makes Dart's `applyModelOutput` drop every field. Segment citations from this model can still be off by one line.
+- Logs: filter the Xcode console by `REVISE-LLM` (load time, free memory, GPU/offload lines, prompt and generation tokens/sec).
+
+### Speed (iPhone 13 first measurement: 537-token prompt took ~16 s, 186 tokens generated at 15 tok/s, 30 s total)
+
+- **Prompt cache.** `LlamaRunner` keeps the KV cache between calls and only processes the part of a prompt that differs
+  from the previous one. Right after Stop (once Moonshine is freed) the engine loads the LLM and reads the system prompt in
+  the background, so the first card skips ~260 tokens and the model load; later cards also skip Dart's fixed instruction block.
+- **Values-only CRM.** For `generateCrm` the model writes only the values (grammar forces `"source_segments": {}`) and
+  `CrmEvidence` fills the citations by looking each value up in the `[s-0001] ...` transcript lines of the prompt. About half
+  the output tokens (81 instead of 186 in the Mac test) and the citations are now correct. Contact details must match a
+  line word for word, otherwise they are removed (the 1.5B model invents emails). If the transcript lines can't be parsed
+  from the prompt, it falls back to model-written citations with the full grammar.
+- **Streaming.** Pass `requestId` to any LLM method and every new piece of text arrives on `revise/captions` as
+  `{"type":"llm","requestId":..., "delta":"..."}` (Dart's `EngineEvent.fromMap` ignores unknown types, so nothing breaks).
+  For `generateCrm` the streamed text is the raw values JSON; the final reply has the evidence added.
+- **Metal checks.** Context uses all layers on the GPU (`n_gpu_layers=99`), `n_batch=n_ubatch=512`, flash attention on
+  (auto-retry if unsupported), 2 CPU threads. **When timing, run a Release build with Metal API Validation off:**
+  Xcode > Product > Scheme > Edit Scheme > Run > Info: Build Configuration = Release; Diagnostics: untick Metal API/Shader
+  Validation. Validation under the debugger slows GPU work a lot. Also turn Low Power Mode off.
+- The shortened system prompt was tried and **rejected**: citations got worse. System prompt length is nearly free now (cached).
 
 ### Channel methods for Dart (all only while state is `stopped`; errors: `model_missing`, `invalid_state`, `inference_failed`)
 

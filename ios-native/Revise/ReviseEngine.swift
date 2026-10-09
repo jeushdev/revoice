@@ -39,6 +39,7 @@ actor ReviseEngine {
     // freed before the next recording starts. Never loaded while Moonshine is loaded.
     private var llm: LlamaRunner?
     private var llmBusy = false
+    private var prewarmTask: Task<Void, Never>?
     private let llmQueue = DispatchQueue(label: "revise.llm", qos: .userInitiated)
 
     /// Delivers one event map to Flutter. Must be safe to call from any thread.
@@ -57,6 +58,7 @@ actor ReviseEngine {
             // Re-init mid-recording: end the recording first.
             _ = stopRecording()
         }
+        await prewarmTask?.value
         if !llmBusy { llm = nil }          // free the LLM before the speech models load
         releaseSTT()
         let llmReady = ReviseModelStore.llmAssetPresent()
@@ -77,6 +79,7 @@ actor ReviseEngine {
         guard language == "en" else {
             throw ReviseError(code: .modelMissing, message: "Only English is supported in v1")
         }
+        await prewarmTask?.value           // let a background LLM load finish before freeing it
         guard !llmBusy else { throw ReviseError(code: .invalidState, message: "An LLM request is still running") }
         llm = nil                          // PRD: free the LLM before recording starts
         try await ensureMicPermission()
@@ -155,6 +158,30 @@ actor ReviseEngine {
         let started = Date()
         releaseSTT()
         Self.logTiming("stop release models", since: started)
+        startLlmPrewarm()
+    }
+
+    /// Right after Moonshine is freed, load the LLM and read the shared system prompt in the
+    /// background, so the first CRM card doesn't pay for model loading and the prompt prefix.
+    /// Requests that arrive meanwhile simply wait for it (`prewarmTask`).
+    private func startLlmPrewarm() {
+        guard llm == nil, prewarmTask == nil, let modelURL = ReviseModelStore.llmModelURL() else { return }
+        prewarmTask = Task { [weak self] in
+            guard let self else { return }
+            await self.prewarmBody(modelURL)
+        }
+    }
+
+    private func prewarmBody(_ modelURL: URL) async {
+        defer { prewarmTask = nil }
+        guard state == .stopped, llm == nil else { return }
+        do {
+            let runner = try await onLlmQueue { try LlamaRunner(modelPath: modelURL.path) }
+            try await onLlmQueue { try runner.warmup(system: ReviseGrammars.crmValuesOnlySystem) }
+            if state == .stopped { llm = runner }          // a restart in the meantime wins
+        } catch {
+            NSLog("REVISE-LLM prewarm failed: %@", "\(error)")   // generate() will retry and report properly
+        }
     }
 
     private static func logTiming(_ what: String, since start: Date) {
@@ -168,13 +195,18 @@ actor ReviseEngine {
     struct LlmResult {
         let text: String
         let stats: LlmStats
+        let diagnostics: [String]      // llama.cpp backend lines from loading (Metal? layers offloaded?)
     }
 
     /// Runs one prompt on the on-device LLM. Only allowed while stopped (PRD section 7), one
     /// request at a time. Frees Moonshine first, loads the LLM on first use, and keeps it loaded
     /// for the next request. `grammar` is optional GBNF text that forces the output's shape.
-    func generate(prompt: String, system: String?, maxTokens: Int, grammar: String?) async throws -> LlmResult {
+    func generate(
+        prompt: String, system: String?, maxTokens: Int, grammar: String?,
+        onToken: (@Sendable (String) -> Void)? = nil
+    ) async throws -> LlmResult {
         guard state == .stopped else { throw Self.invalidState("LLM request") }
+        await prewarmTask?.value                       // reuse the model the background load is preparing
         guard !llmBusy else { throw ReviseError(code: .invalidState, message: "An LLM request is already running") }
         guard let modelURL = ReviseModelStore.llmModelURL() else {
             throw ReviseError(code: .modelMissing, message: "No LLM file is bundled in the app (Models/llm)")
@@ -192,9 +224,10 @@ actor ReviseEngine {
                 llm = runner
             }
             let result = try await onLlmQueue {
-                try runner.generate(prompt: prompt, system: system, maxTokens: maxTokens, grammar: grammar)
+                try runner.generate(
+                    prompt: prompt, system: system, maxTokens: maxTokens, grammar: grammar, onToken: onToken)
             }
-            return LlmResult(text: result.text, stats: result.stats)
+            return LlmResult(text: result.text, stats: result.stats, diagnostics: runner.diagnostics)
         } catch let error as ReviseError {
             throw error
         } catch {

@@ -122,10 +122,20 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let maxTokens = args["maxTokens"] as? Int ?? 512
     var system = args["system"] as? String
     let grammar: String?
+    // CRM: if the "[id] text" transcript lines can be read from the prompt, the model only writes
+    // values and we look up the evidence ourselves (faster, more accurate). Otherwise the model
+    // writes its own citations.
+    var evidenceLines: [CrmEvidence.Line] = []
     switch call.method {
     case "generateCrm":
-      grammar = ReviseGrammars.crm
-      system = system ?? ReviseGrammars.crmSystem
+      evidenceLines = CrmEvidence.parseTranscript(from: prompt)
+      if evidenceLines.isEmpty {
+        grammar = ReviseGrammars.crm
+        system = system ?? ReviseGrammars.crmSystem
+      } else {
+        grammar = ReviseGrammars.crmValuesOnly
+        system = system ?? ReviseGrammars.crmValuesOnlySystem
+      }
     case "cleanLine":
       grammar = nil
       // Dart sends the instruction and the line; make sure the line is in the prompt exactly once.
@@ -143,17 +153,33 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     let method = call.method
     let systemText = system
+    let lines = evidenceLines
+    // Optional streaming: pass "requestId" and every new piece of text arrives on the
+    // revise/captions channel as {"type":"llm","requestId":..., "delta":"..."}.
+    let requestId = args["requestId"] as? String
+    let onToken: (@Sendable (String) -> Void)? = requestId.map { id in
+      { [weak self] delta in
+        DispatchQueue.main.async {
+          self?.eventSink?(["type": "llm", "requestId": id, "delta": delta])
+        }
+      }
+    }
     run(result) {
       let out = try await self.engine.generate(
-        prompt: prompt, system: systemText, maxTokens: maxTokens, grammar: grammar)
+        prompt: prompt, system: systemText, maxTokens: maxTokens, grammar: grammar,
+        onToken: onToken)
       var reply: [String: Any] = [
         "loadMs": out.stats.loadMs,
         "promptTokens": out.stats.promptTokens,
         "generatedTokens": out.stats.generatedTokens,
         "tokensPerSecond": out.stats.tokensPerSecond,
+        "reusedTokens": out.stats.reusedTokens,
+        "promptMs": out.stats.promptMs,
+        "generateMs": out.stats.generateMs,
       ]
       switch method {
-      case "generateCrm": reply["json"] = out.text
+      case "generateCrm":
+        reply["json"] = lines.isEmpty ? out.text : CrmEvidence.attach(to: out.text, lines: lines)
       default: reply["text"] = out.text.trimmingCharacters(in: .whitespacesAndNewlines)
       }
       return reply

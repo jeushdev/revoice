@@ -34,6 +34,11 @@ enum ReviseGrammars {
 
     """# + common
 
+    /// Same card, but `source_segments` is always `{}`: the model only writes values, and
+    /// `CrmEvidence` fills the citations afterwards (fewer tokens, more accurate citations).
+    static let crmValuesOnly = crm
+        .replacingOccurrences(of: #""\"source_segments\": " sources "}""#, with: #""\"source_segments\": {}" "}""#)
+
     /// Any valid JSON value, for the generic `generate` method with `jsonGrammar: true`.
     static let anyJson = #"""
     root ::= object
@@ -51,7 +56,7 @@ enum ReviseGrammars {
     /// any real conversation.
     static let crmSystem = #"""
     You are a careful information extractor. Reply with one JSON object and nothing else.
-    Fill a field only with facts the person stated. Every filled field and every list item must be listed in source_segments with the [segment ids] of the lines that state it. Copy emails, phone numbers and dates exactly as spoken. If a fact is not stated, use null (or []).
+    Fill a field only with facts the person stated. Every filled field and every list item must be listed in source_segments with the [segment ids] of the lines that state it. Copy emails, phone numbers and dates exactly as spoken. contact_mentioned is ONLY an email address or phone number the person said; otherwise null. If a fact is not stated, use null (or []).
 
     Example transcript:
     [s-0002] I'm Ben, I run operations at Delta Foods.
@@ -59,5 +64,18 @@ enum ReviseGrammars {
 
     Example reply:
     {"name": "Ben", "role": "operations lead", "organization": "Delta Foods", "contact_mentioned": "ben@delta.example", "topics": ["supplier"], "commitments": [{"what": "call the supplier", "due": "Tuesday"}], "follow_up": null, "notes": null, "source_segments": {"role": ["s-0002"], "organization": ["s-0002"], "contact_mentioned": ["s-0004"], "topics[0]": ["s-0004"], "commitments[0].what": ["s-0004"], "commitments[0].due": ["s-0004"]}}
+    """#
+
+    /// System prompt matching `crmValuesOnly`: same worked-example style, no citation rules.
+    static let crmValuesOnlySystem = #"""
+    You are a careful information extractor. Reply with one JSON object and nothing else.
+    Fill a field only with facts the person stated. Copy emails, phone numbers and dates exactly as spoken. contact_mentioned is ONLY an email address or phone number the person said; otherwise null. If a fact is not stated, use null (or []). Always write "source_segments": {} exactly.
+
+    Example transcript:
+    [s-0002] I'm Ben, I run operations at Delta Foods.
+    [s-0004] I'll call the supplier on Tuesday. Reach me at ben@delta.example.
+
+    Example reply:
+    {"name": "Ben", "role": "operations lead", "organization": "Delta Foods", "contact_mentioned": "ben@delta.example", "topics": ["supplier"], "commitments": [{"what": "call the supplier", "due": "Tuesday"}], "follow_up": null, "notes": null, "source_segments": {}}
     """#
 }

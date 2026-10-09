@@ -10,6 +10,7 @@
 		0C378D258D99EF643B63CBC6 /* MoonshineVoice in Frameworks */ = {isa = PBXBuildFile; productRef = 55A255DABF6F72C4FAA73EDC /* MoonshineVoice */; };
 		0E8B51FDADD1D97B6732764C /* ReviseModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00F4F3700859C07F3065666 /* ReviseModelStore.swift */; };
 		10DD923F4FC9139AEFE2AC34 /* LlamaRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31CF4A6B5439554C6C745D03 /* LlamaRunner.swift */; };
+		1E5B0DAE1DD774D7E08DA7D5 /* CrmEvidence.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1F45E92722DF2136BF8FF7 /* CrmEvidence.swift */; };
 		2B0ACD5F4604F7D1FAEF1793 /* MoonshineMic.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */; };
 		31C2ED8FD297EB871114ACA0 /* ReviseEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1FB12E0BAD58E669C1DC74 /* ReviseEngine.swift */; };
 		4E2843FE6A1D4715FA2B2109 /* ReviseGrammars.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F534AAF1CA694474642E485 /* ReviseGrammars.swift */; };
@@ -27,6 +28,7 @@
 		7A1FB12E0BAD58E669C1DC74 /* ReviseEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviseEngine.swift; sourceTree = "<group>"; };
 		88BE725ECDF88ED741D18555 /* Models */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder; name = Models; path = ../Models; sourceTree = SOURCE_ROOT; };
 		98B418EBAE9F3F90B38AC666 /* ReviseHarness.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ReviseHarness.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB1F45E92722DF2136BF8FF7 /* CrmEvidence.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = CrmEvidence.swift; path = ../Revise/CrmEvidence.swift; sourceTree = SOURCE_ROOT; };
 		C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = MoonshineMic.swift; path = ../Revise/MoonshineMic.swift; sourceTree = SOURCE_ROOT; };
 		CC454E0B4669E704502B5076 /* HarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarnessView.swift; sourceTree = "<group>"; };
 		EFDCF2160AB7A182C0711ED0 /* ReviseHarnessApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviseHarnessApp.swift; sourceTree = "<group>"; };
@@ -84,6 +86,7 @@
 				C8159E3D0D0A830ACFB5E54F /* MoonshineMic.swift */,
 				31CF4A6B5439554C6C745D03 /* LlamaRunner.swift */,
 				0F534AAF1CA694474642E485 /* ReviseGrammars.swift */,
+				BB1F45E92722DF2136BF8FF7 /* CrmEvidence.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -172,6 +175,7 @@
 				2B0ACD5F4604F7D1FAEF1793 /* MoonshineMic.swift in Sources */,
 				10DD923F4FC9139AEFE2AC34 /* LlamaRunner.swift in Sources */,
 				4E2843FE6A1D4715FA2B2109 /* ReviseGrammars.swift in Sources */,
+				1E5B0DAE1DD774D7E08DA7D5 /* CrmEvidence.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
