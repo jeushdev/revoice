@@ -233,4 +233,20 @@ void main() {
     expect(e, isA<CaptionEvent>());
     expect((e! as CaptionEvent).tEndMs, 50);
   });
+
+  test('summary becomes stale and is rewritten when a speaker label changes', () async {
+    final session = await recordFullMeeting(MockScenario.meeting);
+    final summary = SummaryController(session.engine, session);
+    await summary.run();
+    expect(summary.stale, isFalse);
+    final first = summary.summary;
+    session.setLineSpeaker('s-0004', 2); // tap-to-fix
+    expect(summary.stale, isTrue);
+    await until(() => !summary.stale && summary.status == SummaryStatus.done);
+    expect(summary.summary, isNotNull);
+    expect(first, isNotNull);
+    session.rename(1, 'Boss'); // rename also counts
+    expect(summary.stale, isTrue);
+    summary.dispose();
+  });
 }

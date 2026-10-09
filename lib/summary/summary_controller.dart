@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -46,7 +47,9 @@ class SuggestedQuestion {
 /// Questions are answered one at a time when the user taps them.
 class SummaryController extends ChangeNotifier {
   SummaryController(this.engine, this.session, {LlmLock? lock})
-    : lock = lock ?? LlmLock();
+    : lock = lock ?? LlmLock() {
+    session.addListener(_onSessionChanged);
+  }
 
   final CaptionEngine engine;
   final SessionController session;
@@ -72,6 +75,46 @@ class SummaryController extends ChangeNotifier {
   final List<SuggestedQuestion> questions = [];
 
   bool get running => status == SummaryStatus.running;
+
+  /// Who-said-what the summary was written from: every line's speaker plus the speaker names.
+  /// When it changes (tap-to-fix, rename, speaker revision, suggestions on/off), the summary no
+  /// longer matches the transcript.
+  String _labelSignature() =>
+      '${session.finals.map((l) => '${l.id}:${session.speakerOf(l)}').join(',')}'
+      '|${session.speakerNames.entries.map((e) => '${e.key}=${e.value.name}').join(',')}';
+  String? _summarySignature;
+  Timer? _regenerateTimer;
+
+  /// True when speaker labels changed after the summary was written (it is rewritten shortly
+  /// after; [regenerate] does it right away).
+  bool get stale =>
+      summary != null && _summarySignature != null && _summarySignature != _labelSignature();
+
+  void _onSessionChanged() {
+    if (status != SummaryStatus.done || !stale) return;
+    // Wait for the user to finish fixing labels, then rewrite once.
+    _regenerateTimer?.cancel();
+    _regenerateTimer = Timer(const Duration(seconds: 2), regenerate);
+    notifyListeners();
+  }
+
+  /// Rewrites the summary from the current speaker labels. Suggested questions stay.
+  Future<void> regenerate() async {
+    _regenerateTimer?.cancel();
+    if (running) {
+      // A run is in progress; it ends by checking whether the labels moved again.
+      return;
+    }
+    steps[SummaryStep.summarizing] = StepStatus.pending;
+    await run();
+  }
+
+  @override
+  void dispose() {
+    _regenerateTimer?.cancel();
+    session.removeListener(_onSessionChanged);
+    super.dispose();
+  }
 
   /// Questions the user tapped, in the order they were asked.
   final List<SuggestedQuestion> asked = [];
@@ -119,6 +162,7 @@ class SummaryController extends ChangeNotifier {
 
     status = SummaryStatus.done;
     notifyListeners();
+    if (stale) _onSessionChanged(); // labels moved while it was running: write it again
   }
 
   /// Answers [q] (also used to retry a failed answer).
@@ -240,10 +284,12 @@ class SummaryController extends ChangeNotifier {
   }
 
   Future<void> _summarize() async {
+    final signature = _labelSignature(); // the labels this summary is written with
     final out = await _json(_summaryPrompt(), maxTokens: 220, grammar: summaryTextGrammar);
     final text = (out['summary'] as String?)?.trim() ?? '';
     if (text.isEmpty) throw const FormatException('empty summary');
     summary = text;
+    _summarySignature = signature;
   }
 
   Future<void> _suggest() async {
