@@ -335,6 +335,35 @@ class _LiveScreenState extends State<LiveScreen> {
                   ),
                 ),
               Expanded(child: _captions(context, app.textSize)),
+              // Manual speaker label for new lines, for when the voices are not told apart.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GlassButton(
+                        label: 'Switch speaker',
+                        icon: Icons.swap_horiz_rounded,
+                        color: c.ink,
+                        onPressed: state == EngineState.listening
+                            ? session.switchSpeaker
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GlassButton(
+                        label: 'Auto',
+                        icon: Icons.auto_awesome_rounded,
+                        color: c.ink,
+                        onPressed: session.liveSpeakerOverride != null
+                            ? session.useAutoSpeaker
+                            : null,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                 child: Row(

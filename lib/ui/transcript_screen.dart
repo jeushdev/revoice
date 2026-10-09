@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../ai/meeting_ai_controller.dart' show Turn;
 import '../app/app_state.dart';
 import '../session/session_controller.dart';
 import '../summary/summary_controller.dart';
@@ -62,22 +63,25 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
     if (_tab == 0 && saved.summary.status == SummaryStatus.done) {
       return saved.summary.plainText();
     }
+    if (_clean) {
+      return saved.ai.cleanTurns
+          .map((t) => '[${formatMs(t.tStartMs)}] ${s.displayName(t.speakerId)}: ${t.text}')
+          .join('\n');
+    }
     return s.finals
         .map(
           (l) =>
               '[${formatMs(l.tStartMs)}] ${s.displayName(l.speakerId)}: '
-              '${_clean ? saved.clean.textFor(l) : l.text}',
+              '${l.text}',
         )
         .join('\n');
   }
 
   void _maybeClean() {
-    final clean = saved.clean;
-    if (_clean &&
-        !saved.summary.running &&
-        !clean.running &&
-        clean.hasPending) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => clean.run());
+    // Clean = merge rules + um/uh removal + capital letter (MeetingAiController, no model).
+    final ai = saved.ai;
+    if (_clean && ai.needsPolish) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => ai.polish());
     }
   }
 
@@ -91,7 +95,8 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
       if (mounted) setState(() => _highlight = const {});
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final ctx = _lineKeys[ids.first]?.currentContext;
+      final lead = _clean ? (saved.ai.turnOfSegment(ids.first)?.id ?? ids.first) : ids.first;
+      final ctx = _lineKeys[lead]?.currentContext;
       if (ctx != null) {
         Scrollable.ensureVisible(
           ctx,
@@ -107,7 +112,7 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
   Widget build(BuildContext context) {
     final session = saved.session;
     return ListenableBuilder(
-      listenable: Listenable.merge([session, saved.summary, saved.clean]),
+      listenable: Listenable.merge([session, saved.summary, saved.ai]),
       builder: (context, _) {
         _maybeClean();
         final lines = session.finals;
@@ -217,10 +222,8 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
           children: [
             Expanded(
               child: Text(
-                _clean && (saved.summary.running || saved.clean.running)
-                    ? saved.summary.running
-                          ? 'Cleaning starts after the summary.'
-                          : 'Cleaning lines…'
+                _clean
+                    ? '${saved.ai.cleanTurns.length} turns'
                     : '${lines.length} lines',
                 style: TextStyle(fontSize: 13, color: c.ink2),
               ),
@@ -232,19 +235,29 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
             ),
           ],
         ),
-        for (final l in lines) _line(context, l),
+        if (_clean)
+          for (final t in saved.ai.cleanTurns) _turn(context, t)
+        else
+          for (final l in lines) _line(context, l),
         if (session.interrupted)
           _InterruptDivider(atMs: session.interruptedAtMs ?? 0),
       ],
     );
   }
 
-  Widget _line(BuildContext context, Segment l) {
+  Widget _line(BuildContext context, Segment l) =>
+      _row(context, l.id, {l.id}, l.speakerId, l.tStartMs, l.text);
+
+  /// Clean view: several lines merged into one turn (lit when any of its lines is a source).
+  Widget _turn(BuildContext context, Turn t) =>
+      _row(context, t.id, t.segmentIds.toSet(), t.speakerId, t.tStartMs, t.text);
+
+  Widget _row(BuildContext context, String id, Set<String> ids, int speakerId, int tStartMs, String text) {
     final c = context.rc;
     final session = saved.session;
-    final lit = _highlight.contains(l.id);
+    final lit = ids.any(_highlight.contains);
     return AnimatedContainer(
-      key: _lineKeys.putIfAbsent(l.id, GlobalKey.new),
+      key: _lineKeys.putIfAbsent(id, GlobalKey.new),
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOut,
       margin: const EdgeInsets.only(top: 10),
@@ -260,19 +273,19 @@ class _TranscriptScreenState extends State<TranscriptScreen> {
             children: [
               SessionSpeakerPill(
                 session: session,
-                speakerId: l.speakerId,
+                speakerId: speakerId,
                 onRename: (id) => showRenameSheet(context, session, id),
               ),
               const SizedBox(width: 10),
               Text(
-                formatMs(l.tStartMs),
+                formatMs(tStartMs),
                 style: TextStyle(fontSize: 13, color: c.ink3),
               ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            _clean ? saved.clean.textFor(l) : l.text,
+            text,
             style: TextStyle(fontSize: 17, height: 1.35, color: c.ink),
           ),
         ],

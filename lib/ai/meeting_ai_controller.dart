@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
+import '../engine/llm_lock.dart';
 import '../session/session_controller.dart';
 import '../transcript/clean_transcript.dart';
 import 'meeting_parsing.dart';
@@ -42,13 +43,23 @@ class TranscriptLine {
 /// Listen to this object (it is a [ChangeNotifier]); read [state], [cleanTurns], [summary],
 /// [suggestedQuestions], [answers], [streamingAnswer].
 class MeetingAiController extends ChangeNotifier {
-  MeetingAiController(this.engine, this.session, {this.autoRun = true, this.llmPolish = false}) {
+  MeetingAiController(
+    this.engine,
+    this.session, {
+    this.autoRun = true,
+    this.llmPolish = false,
+    LlmLock? lock,
+  }) : lock = lock ?? LlmLock() {
     session.addListener(_onSessionChanged);
     _tokens = engine.events.listen(_onEngineEvent);
   }
 
   final CaptionEngine engine;
   final SessionController session;
+
+  /// The ONE LLM queue. Pass the app's lock (SummaryController.lock) so summary, questions and
+  /// everything here never overlap; native rejects overlapping requests.
+  final LlmLock lock;
 
   /// When true, polishing + summary + suggested questions start by themselves right after Stop.
   final bool autoRun;
@@ -104,7 +115,6 @@ class MeetingAiController extends ChangeNotifier {
   List<Turn> _turns = [];
   bool _turnsBuilt = false;
   StreamSubscription<EngineEvent>? _tokens;
-  Future<void> _queue = Future.value();
   String? _activeRequest;
   final StringBuffer _streamRaw = StringBuffer();
   int _requestCounter = 0;
@@ -158,7 +168,12 @@ class MeetingAiController extends ChangeNotifier {
 
   /// Merges fragments (instant) and punctuates each merged turn with the LLM. Turns whose words
   /// the model changed keep their original words. Already polished turns are skipped.
-  Future<void> polish() => _enqueue(MeetingAiState.polishing, _polishAll);
+  Future<void> polish() async {
+    if (llmPolish) return _enqueue(MeetingAiState.polishing, _polishAll);
+    // Rules only (no model call), so it does not wait behind a running summary.
+    await _polishAll();
+    notifyListeners();
+  }
 
   Future<void> _polishAll() async {
     _ensureTurns();
@@ -438,9 +453,9 @@ class MeetingAiController extends ChangeNotifier {
     }
   }
 
-  /// Runs [work] after earlier LLM jobs finish, with [running] as the visible state.
+  /// Runs [work] on the shared LLM lock, with [running] as the visible state.
   Future<void> _enqueue(MeetingAiState running, Future<void> Function() work) {
-    final job = _queue.then((_) async {
+    return lock.run(() async {
       state = running;
       errorMessage = null;
       notifyListeners();
@@ -459,8 +474,6 @@ class MeetingAiController extends ChangeNotifier {
       }
       notifyListeners();
     });
-    _queue = job;
-    return job;
   }
 
   void _onSessionChanged() {

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../ai/meeting_ai_controller.dart';
 import '../engine/caption_engine.dart';
 import '../engine/mock_caption_engine.dart';
 import '../engine/platform_caption_engine.dart';
@@ -10,10 +11,20 @@ import '../summary/summary_controller.dart';
 /// One recorded session in the Library.
 class SavedSession {
   SavedSession(this.session, this.summary)
-    : clean = CleanTranscript(session.engine, session, lock: summary.lock);
+    : clean = CleanTranscript(session.engine, session, lock: summary.lock),
+      ai = MeetingAiController(
+        session.engine,
+        session,
+        autoRun: false,
+        lock: summary.lock,
+      );
   final SessionController session;
   final SummaryController summary;
+  /// Per-line LLM clean-up. Kept in code but NOT reachable from the UI (too slow on the phone).
   final CleanTranscript clean;
+
+  /// Clean transcript (merge rules, no model) and the rest of the meeting AI logic.
+  final MeetingAiController ai;
 
   DateTime get startedAt => session.startedAt ?? DateTime.now();
   Duration get duration => session.elapsed;

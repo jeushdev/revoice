@@ -372,7 +372,6 @@ void main() {
       ]);
       final ai = MeetingAiController(engine, session, autoRun: false);
       await ai.polish();
-      expect(ai.state, MeetingAiState.done);
       expect(engine.cleanCalls, isEmpty);
       expect(ai.cleanTurns.first.text, 'So the price is 500 pesos a month');
       expect(ai.cleanTurns.first.status, TurnStatus.polished);
