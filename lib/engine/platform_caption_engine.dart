@@ -70,12 +70,14 @@ class PlatformCaptionEngine implements CaptionEngine {
     int maxTokens = 512,
     String? system,
     Object? jsonGrammar,
+    String? requestId,
   }) async {
     final r = await _call<Map<Object?, Object?>>('generate', {
       'prompt': prompt,
       'maxTokens': maxTokens,
       if (system != null) 'system': system,
       if (jsonGrammar != null) 'jsonGrammar': jsonGrammar,
+      if (requestId != null) 'requestId': requestId,
     });
     return r?['text'] as String? ?? '';
   }

@@ -30,6 +30,11 @@ sealed class EngineEvent {
         final speaker = (raw['speakerId'] as num?)?.toInt();
         if (id is! String || speaker == null || speaker < 0) return null;
         return SpeakerRevisionEvent(segmentId: id, speakerId: speaker);
+      case 'llm':
+        final id = raw['requestId'];
+        final delta = raw['delta'];
+        if (id is! String || delta is! String) return null;
+        return LlmTokenEvent(requestId: id, delta: delta);
       case 'state':
         final state = EngineState.values
             .where((s) => s.name == raw['state'])
@@ -78,6 +83,14 @@ class SpeakerRevisionEvent extends EngineEvent {
 
   final String segmentId;
   final int speakerId;
+}
+
+/// A piece of text the on-device LLM just wrote for the `generate` call that carried [requestId].
+class LlmTokenEvent extends EngineEvent {
+  const LlmTokenEvent({required this.requestId, required this.delta});
+
+  final String requestId;
+  final String delta;
 }
 
 class StateEvent extends EngineEvent {

@@ -129,6 +129,7 @@ class MockCaptionEngine implements CaptionEngine {
     int maxTokens = 512,
     String? system,
     Object? jsonGrammar,
+    String? requestId,
   }) async => throw const EngineException(
     EngineErrorCode.modelMissing,
     'Demo mode has no on-device model for this step.',

@@ -30,6 +30,7 @@ class _Engine implements CaptionEngine {
     int maxTokens = 512,
     String? system,
     Object? jsonGrammar,
+    String? requestId,
   }) async => throw const EngineException(EngineErrorCode.modelMissing, 'no llm');
   @override
   Future<void> dispose() async {}

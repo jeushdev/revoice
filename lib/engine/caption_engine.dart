@@ -25,12 +25,15 @@ abstract class CaptionEngine {
 
   /// Generic on-device LLM call (iOS: llama.cpp). Returns the generated text.
   /// [jsonGrammar]: `true` = any valid JSON, a String = your own GBNF grammar, null = free text.
+  /// [requestId]: when set, every new piece of text is also sent on [events] as an
+  /// [LlmTokenEvent] with this id while the model is writing (iOS only).
   /// Throws [EngineException] (model_missing when no LLM is available).
   Future<String> generate({
     required String prompt,
     int maxTokens = 512,
     String? system,
     Object? jsonGrammar,
+    String? requestId,
   });
 
   Future<void> dispose();

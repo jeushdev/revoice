@@ -212,6 +212,10 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Test helper: puts a finished line into the session without running an engine.
+  @visibleForTesting
+  void debugAddFinal(Segment s) => _segments[s.id] = s;
+
   /// Manual names always win over inferred names.
   void rename(int speakerId, String name) {
     final trimmed = name.trim();
@@ -226,6 +230,8 @@ class SessionController extends ChangeNotifier {
         _onCaption(event);
       case SpeakerRevisionEvent():
         _onSpeakerRevision(event);
+      case LlmTokenEvent():
+        return; // LLM streaming belongs to MeetingAiController, not the session
       case StateEvent(:final state, :final message):
         this.state = state;
         if (state == EngineState.error) {
