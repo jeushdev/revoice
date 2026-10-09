@@ -6,8 +6,9 @@ import UIKit
 /// - EventChannel `revise/captions`: native -> Dart, one map per event.
 /// - MethodChannel `revise/engine`: Dart -> native commands.
 ///
-/// The channel plumbing and state machine are done. Zairus wires Moonshine
-/// (STT + diarization) and the local LLM into the `TODO(zairus)` spots.
+/// STT, speaker IDs and the state machine live in `ReviseEngine`
+/// (ios-native/Revise, referenced from this project, not copied). This class only
+/// translates channel calls and events. The local LLM is still a TODO(zairus).
 /// Audio never crosses into Dart.
 final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
 
@@ -16,10 +17,23 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   }
 
   private var eventSink: FlutterEventSink?
-  private var state: State?
-  private var sttReady = false
+  private var state: State?   // mirrors the engine's last state event (main thread only)
   private var llmAssetsPresent = false
   private var llmBusy = false
+
+  /// Moonshine STT + speaker IDs. Events come from audio threads, so hop to main
+  /// before touching `state` or the sink; main-queue order keeps events in order.
+  private lazy var engine = ReviseEngine { [weak self] event in
+    DispatchQueue.main.async {
+      guard let self else { return }
+      if event["type"] as? String == "state",
+        let raw = event["state"] as? String, let new = State(rawValue: raw)
+      {
+        self.state = new
+      }
+      self.eventSink?(event)
+    }
+  }
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let instance = ReviseEnginePlugin()
@@ -50,21 +64,29 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "init":
-      handleInit(result)
+      llmAssetsPresent = ReviseModelStore.llmAssetPresent()
+      run(result) { await self.engine.initialize() }
     case "start":
-      handleStart(result)
+      let language = (call.arguments as? [String: Any])?["language"] as? String ?? "en"
+      run(result) {
+        try await self.engine.start(language: language)
+        return true
+      }
     case "pause":
-      guard state == .listening else { return result(invalidState("pause")) }
-      // TODO(zairus): stop mic capture, flush pending speech as final, then:
-      emitState(.paused)
-      result(true)
+      run(result) {
+        try await self.engine.pause()
+        return true
+      }
     case "resume":
-      guard state == .paused else { return result(invalidState("resume")) }
-      // TODO(zairus): restart mic capture; keep the session and speaker mapping.
-      emitState(.listening)
-      result(true)
+      run(result) {
+        try await self.engine.resume()
+        return true
+      }
     case "stop":
-      handleStop(result)
+      run(result) {
+        try await self.engine.stop()
+        return true
+      }
     case "generateCrm", "cleanLine":
       handleLlm(call, result)
     default:
@@ -72,37 +94,21 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
   }
 
-  private func handleInit(_ result: @escaping FlutterResult) {
-    // TODO(zairus): load bundled Moonshine STT + diarization assets from the
-    // app bundle with local-file loaders (no auto-download). Set sttReady.
-    sttReady = false
-    // TODO(zairus): check the bundled LLM file exists. Do NOT load it here.
-    llmAssetsPresent = false
-    emitState(.ready)
-    result(["sttReady": sttReady, "llmReady": llmAssetsPresent])
-  }
-
-  private func handleStart(_ result: @escaping FlutterResult) {
-    guard state == .ready || state == .stopped else { return result(invalidState("start")) }
-    guard sttReady else {
-      return result(
-        FlutterError(
-          code: "model_missing", message: "Moonshine is not wired in yet.", details: nil))
+  /// Runs async engine work, then answers Flutter on the main thread, mapping
+  /// `ReviseError` to the PlatformException codes from PRD section 7.
+  private func run(_ result: @escaping FlutterResult, _ work: @escaping () async throws -> Any) {
+    Task {
+      let reply: Any
+      do {
+        reply = try await work()
+      } catch let error as ReviseError {
+        reply = FlutterError(code: error.code.rawValue, message: error.message, details: nil)
+      } catch {
+        reply = FlutterError(
+          code: "capture_failed", message: error.localizedDescription, details: nil)
+      }
+      await MainActor.run { result(reply) }
     }
-    // TODO(zairus): free the LLM if loaded, reload STT if it was released,
-    // request mic permission (permission_denied on refusal), start capture,
-    // and call emitCaption(...) for every partial and final segment.
-    emitState(.listening)
-    result(true)
-  }
-
-  private func handleStop(_ result: @escaping FlutterResult) {
-    if state == .stopped { return result(true) }  // repeated Stop is a no-op
-    guard state == .listening || state == .paused else { return result(invalidState("stop")) }
-    // TODO(zairus): stop capture, flush every pending segment as final
-    // (emitCaption with isFinal=true), then release STT + diarization.
-    emitState(.stopped)
-    result(true)
   }
 
   private func handleLlm(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
@@ -137,34 +143,6 @@ final class ReviseEnginePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         result(call.method == "generateCrm" ? ["json": text] : ["text": text])
       }
     }
-  }
-
-  // MARK: - Events
-
-  /// Call for every partial and final segment. Always on the main thread.
-  func emitCaption(
-    segmentId: String, text: String, speakerId: Int, isFinal: Bool, tStartMs: Int, tEndMs: Int
-  ) {
-    send([
-      "type": "caption", "segmentId": segmentId, "text": text, "speakerId": speakerId,
-      "isFinal": isFinal, "tStartMs": tStartMs, "tEndMs": tEndMs,
-    ])
-  }
-
-  /// Use for async failures (mic interrupted, capture failed).
-  func emitError(_ message: String) {
-    state = .error
-    send(["type": "state", "state": State.error.rawValue, "message": message])
-  }
-
-  private func emitState(_ newState: State) {
-    state = newState
-    send(["type": "state", "state": newState.rawValue, "message": NSNull()])
-  }
-
-  private func send(_ event: [String: Any]) {
-    let deliver = { self.eventSink?(event) }
-    Thread.isMainThread ? deliver() : DispatchQueue.main.async(execute: deliver)
   }
 
   private func invalidState(_ method: String) -> FlutterError {
