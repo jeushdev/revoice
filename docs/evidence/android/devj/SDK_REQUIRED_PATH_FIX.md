@@ -90,6 +90,12 @@ inference occurs in these tests.
 
 ## Second-session core review: still an open gate
 
+**Follow-up:** the subsequent user-requested core source correction and desktop
+regressions are in [`SDK_CROSS_SESSION_FIX.md`](SDK_CROSS_SESSION_FIX.md).
+The findings below describe the original 0.1.5 source. Patch 0004 now addresses
+state ownership, resets and initialization; full core linking/real inference and
+adoption remain pending. None of the JNI-only AARs includes that patch.
+
 Re-inspected the already-present pinned core source; no core source was patched.
 Findings confirm that Java/JNI recreation or serialized app calls alone cannot
 isolate sessions:

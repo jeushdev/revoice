@@ -57,6 +57,14 @@ ten verified speech files alone cannot satisfy the default full build.
 
 ## Moonshine decision before adoption
 
+October 10 follow-up: required-path patch 0003 and core-isolation patch 0004
+are now source-prepared, with desktop evidence in
+`devj/SDK_REQUIRED_PATH_FIX.md` and `devj/SDK_CROSS_SESSION_FIX.md`.
+The latter passed ten host groups, singleton retry, three negative mutations and
+six Android object builds. Neither patch has been adopted. In particular, the
+published core and old JNI-only candidate AARs still lack stream isolation;
+full core linking with the real embedded model is required before capture.
+
 The published 0.1.5 defects and review limits are documented in
 `devj/SDK_ARTIFACT_REVIEW.md`, `devj/SDK_FIX_PROPOSAL.md` and
 `devj/SDK_FIX_REVIEW.md`. The two candidate patches are suitable for a bounded

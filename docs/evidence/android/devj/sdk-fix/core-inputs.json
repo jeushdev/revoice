@@ -1,0 +1,14 @@
+{
+  "commit": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+  "files": {
+    "core/silero-vad.h": "9560c0c051d2d4a6be3f33ac7ba96949ae058bbf6676f3c710bb8e3627b9a50f",
+    "core/silero-vad.cpp": "1fdf4f636a529a9a21f16a4124ce11a62f007bfddbfa4783a95089c13da1747e",
+    "core/voice-activity-detector.h": "29c313f9a6592ae1c291953ffac9058294a809792d9d33d11469e83a6062f0ba",
+    "core/voice-activity-detector.cpp": "8fab332566ed5b69e279dd0d6ab82921d5024070a7bb9730e1d4a4b4e023118d",
+    "core/moonshine-utils/debug-utils.h": "de05ee398628b102d4bd261e08bef8b757499d2b5eefed44668de720434b7258",
+    "core/ort-utils/ort-utils.h": "ee77f361dfa3312ae8b74763bdec0e80161917262fb83e85a4b77fba3e9f5dc4",
+    "core/resampler.h": "cf26b02762cc0c755ae845d1e35bb634c2860abc7742792d72d3ad8536a35411",
+    "core/third-party/onnxruntime/include/onnxruntime_c_api.h": "79c9fb08ed42c1dc143a675cbae39c8419c6cdbe093dbd2325c9d8b53b679f64",
+    "core/third-party/onnxruntime/include/onnxruntime_ep_c_api.h": "59cd42c321c83309b28c9f5605826d33d04afacaedff4604405a530756b3d4e5"
+  }
+}

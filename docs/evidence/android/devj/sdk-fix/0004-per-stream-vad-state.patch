@@ -1,0 +1,400 @@
+diff --git a/core/silero-vad.h b/core/silero-vad.h
+--- a/core/silero-vad.h
++++ b/core/silero-vad.h
+@@ -1,5 +1,6 @@
+ 
+ 
++#include <array>
+ #include <chrono>
+ #include <cmath>  // for std::rint
+ #include <cstdarg>
+@@ -32,8 +33,6 @@
+   // ----- Context-related additions -----
+   static const int context_samples =
+       64;                       // For 16kHz, 64 samples are added as context.
+-  std::vector<float> _context;  // Holds the last 64 samples from the previous
+-                                // chunk (initialized to zero).
+ 
+   // Original window size (e.g., 32ms corresponds to 512 samples)
+   int window_size_samples;
+@@ -44,15 +43,10 @@
+   int sr_per_ms;
+ 
+   // ONNX Runtime input/output buffers
+-  std::vector<OrtValue *> ort_inputs;
+   std::vector<const char *> input_node_names = {"input", "state", "sr"};
+-  std::vector<float> input;
+-  unsigned int size_state = 2 * 1 * 128;
+-  std::vector<float> _state;
+   int64_t sr;  // scalar sample rate
+   int64_t input_node_dims[2] = {};
+   const int64_t state_node_dims[3] = {2, 1, 128};
+-  std::vector<OrtValue *> ort_outputs;
+   std::vector<const char *> output_node_names = {"output", "stateN"};
+ 
+   // Model configuration parameters
+@@ -66,11 +60,22 @@
+   // Initializes the common ONNX runtime environment (env, session_options,
+   // memory_info, allocator).
+   void init_onnx_env();
++  void release_onnx_resources();
+ 
+   // Initializes threading settings.
+   void init_engine_threads(int inter_threads, int intra_threads);
+ 
+  public:
++  // History is owned by a detector, never by the shared model/session.
++  struct State {
++    std::array<float, 2 * 1 * 128> recurrent{};
++    std::array<float, context_samples> context{};
++    void reset() {
++      recurrent.fill(0.0f);
++      context.fill(0.0f);
++    }
++  };
++
+   SileroVad(
+       int sample_rate = 16000, int windows_frame_size = 32,
+       float threshold = 0.5, int min_silence_duration_ms = 100,
+@@ -84,6 +89,6 @@
+ 
+   bool is_loaded() const { return session != nullptr; }
+ 
+-  void predict(const std::vector<float> &data_chunk, float *out_probability,
+-               int *out_flag);
++  void predict(const std::vector<float> &data_chunk, State &state,
++               float *out_probability, int *out_flag);
+ };
+diff --git a/core/silero-vad.cpp b/core/silero-vad.cpp
+--- a/core/silero-vad.cpp
++++ b/core/silero-vad.cpp
+@@ -1,30 +1,52 @@
+ #include "silero-vad.h"
++
++#include <algorithm>
+ 
+ #include "ort-utils.h"
+ #include "silero-vad-model-data.h"
+ 
++namespace {
++void check_vad_status(const OrtApi *api, OrtStatus *status) {
++  if (status != nullptr) {
++    api->ReleaseStatus(status);
++    throw std::runtime_error("Silero VAD operation failed");
++  }
++}
++
++struct VadValues {
++  const OrtApi *api;
++  OrtValue *inputs[3] = {};
++  OrtValue *outputs[2] = {};
++  ~VadValues() {
++    for (OrtValue *value : outputs) if (value) api->ReleaseValue(value);
++    for (OrtValue *value : inputs) if (value) api->ReleaseValue(value);
++  }
++};
++}  // namespace
++
+ void SileroVad::init_onnx_env() {
+   ort_api = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+-  LOG_ORT_ERROR(ort_api, ort_create_env(ort_api, ORT_LOGGING_LEVEL_WARNING,
+-                                        "SileroVAD", &env));
+-  LOG_ORT_ERROR(ort_api, ort_api->CreateSessionOptions(&session_options));
+-  LOG_ORT_ERROR(ort_api, ort_api->SetIntraOpNumThreads(session_options, 1));
+-  LOG_ORT_ERROR(ort_api, ort_api->SetInterOpNumThreads(session_options, 1));
+-  LOG_ORT_ERROR(ort_api, ort_api->SetSessionGraphOptimizationLevel(
+-                             session_options, ORT_ENABLE_ALL));
+-  LOG_ORT_ERROR(ort_api, ort_api->CreateCpuMemoryInfo(
+-                             OrtArenaAllocator, OrtMemTypeCPU, &memory_info));
+-  LOG_ORT_ERROR(ort_api, ort_api->GetAllocatorWithDefaultOptions(&allocator));
++  if (!ort_api) throw std::runtime_error("Silero VAD API unavailable");
++  check_vad_status(ort_api, ort_create_env(ort_api, ORT_LOGGING_LEVEL_WARNING,
++                                          "SileroVAD", &env));
++  check_vad_status(ort_api, ort_api->CreateSessionOptions(&session_options));
++  check_vad_status(ort_api, ort_api->SetIntraOpNumThreads(session_options, 1));
++  check_vad_status(ort_api, ort_api->SetInterOpNumThreads(session_options, 1));
++  check_vad_status(ort_api, ort_api->SetSessionGraphOptimizationLevel(
++                              session_options, ORT_ENABLE_ALL));
++  check_vad_status(ort_api, ort_api->CreateCpuMemoryInfo(
++                              OrtArenaAllocator, OrtMemTypeCPU, &memory_info));
++  check_vad_status(ort_api, ort_api->GetAllocatorWithDefaultOptions(&allocator));
+ }
+ 
+ // Initializes threading settings.
+ void SileroVad::init_engine_threads(int inter_threads, int intra_threads) {
+-  LOG_ORT_ERROR(ort_api,
+-                ort_api->SetIntraOpNumThreads(session_options, intra_threads));
+-  LOG_ORT_ERROR(ort_api,
+-                ort_api->SetInterOpNumThreads(session_options, inter_threads));
+-  LOG_ORT_ERROR(ort_api, ort_api->SetSessionGraphOptimizationLevel(
+-                             session_options, ORT_ENABLE_ALL));
++  check_vad_status(ort_api,
++                  ort_api->SetIntraOpNumThreads(session_options, intra_threads));
++  check_vad_status(ort_api,
++                  ort_api->SetInterOpNumThreads(session_options, inter_threads));
++  check_vad_status(ort_api, ort_api->SetSessionGraphOptimizationLevel(
++                              session_options, ORT_ENABLE_ALL));
+ }
+ 
+ SileroVad::SileroVad(int sample_rate, int windows_frame_size, float threshold,
+@@ -45,8 +67,6 @@
+       window_size_samples + context_samples;  // 512 + 64 = 576 samples
+   input_node_dims[0] = 1;
+   input_node_dims[1] = effective_window_size;
+-  _state.resize(size_state);
+-  _context.resize(context_samples, 0.0f);  // Initialize context to zeros
+   sr = sample_rate;                        // scalar
+   min_speech_samples = sr_per_ms * min_speech_duration_ms;
+   max_speech_samples = (sample_rate * max_speech_duration_s -
+@@ -54,7 +74,14 @@
+   min_silence_samples = sr_per_ms * min_silence_duration_ms;
+   min_silence_samples_at_max_speech = sr_per_ms * 98;
+   // Load model from embedded data
+-  load_from_memory(silero_vad_onnx, silero_vad_onnx_len);
++  try {
++    if (load_from_memory(silero_vad_onnx, silero_vad_onnx_len) != 0 || !session) {
++      throw std::runtime_error("Silero VAD model load failed");
++    }
++  } catch (...) {
++    release_onnx_resources();
++    throw;
++  }
+ }
+ 
+ int SileroVad::load_from_memory(const uint8_t *model_data,
+@@ -64,7 +91,9 @@
+                                  model_data_size, &session);
+ }
+ 
+-SileroVad::~SileroVad() {
++SileroVad::~SileroVad() { release_onnx_resources(); }
++
++void SileroVad::release_onnx_resources() {
+   if (session) ort_api->ReleaseSession(session);
+   if (session_options) ort_api->ReleaseSessionOptions(session_options);
+   if (env) ort_api->ReleaseEnv(env);
+@@ -75,99 +104,46 @@
+ // Inference: runs inference on one chunk of input data.
+ // data_chunk is expected to have window_size_samples samples (e.g., 512 for
+ // 16kHz).
+-void SileroVad::predict(const std::vector<float> &data_chunk,
++void SileroVad::predict(const std::vector<float> &data_chunk, State &state,
+                         float *out_probability, int *out_flag) {
+-  // Build input by prepending context (64 samples) to data_chunk (512 samples)
+-  // = 576 total
+-  input.resize(effective_window_size);
+-  std::copy(_context.begin(), _context.end(), input.begin());
++  if (data_chunk.size() != static_cast<size_t>(window_size_samples)) {
++    throw std::invalid_argument("Silero VAD chunk size mismatch");
++  }
++  // Scratch tensors are call-local; history is explicitly stream-owned.
++  std::vector<float> input(effective_window_size);
++  std::copy(state.context.begin(), state.context.end(), input.begin());
+   std::copy(data_chunk.begin(), data_chunk.end(),
+             input.begin() + context_samples);
+-
+-  // Create input tensor
+-  OrtValue *input_ort = nullptr;
+-  OrtValue *state_ort = nullptr;
+-  OrtValue *sr_ort = nullptr;
+-
+-  OrtStatus *status = nullptr;
+-
+-  status = ort_api->CreateTensorWithDataAsOrtValue(
++  // Failed inference must not commit even a modified recurrent input tensor.
++  auto recurrent = state.recurrent;
++  VadValues values{ort_api};
++  check_vad_status(ort_api, ort_api->CreateTensorWithDataAsOrtValue(
+       memory_info, input.data(), input.size() * sizeof(float), input_node_dims,
+-      2, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &input_ort);
+-  if (status != nullptr) {
+-    const char *msg = ort_api->GetErrorMessage(status);
+-    fprintf(stderr, "CreateTensorWithDataAsOrtValue (input) failed: %s\n", msg);
+-    ort_api->ReleaseStatus(status);
+-    return;
++      2, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &values.inputs[0]));
++  check_vad_status(ort_api, ort_api->CreateTensorWithDataAsOrtValue(
++      memory_info, recurrent.data(), recurrent.size() * sizeof(float),
++      state_node_dims, 3, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &values.inputs[1]));
++  check_vad_status(ort_api, ort_api->CreateTensorWithDataAsOrtValue(
++      memory_info, &sr, sizeof(int64_t), nullptr, 0,
++      ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &values.inputs[2]));
++  check_vad_status(ort_api, ort_api->Run(
++      session, nullptr, input_node_names.data(), values.inputs, 3,
++      output_node_names.data(), output_node_names.size(), values.outputs));
++  if (!values.outputs[0] || !values.outputs[1]) {
++    throw std::runtime_error("Silero VAD missing output");
+   }
+-
+-  status = ort_api->CreateTensorWithDataAsOrtValue(
+-      memory_info, _state.data(), _state.size() * sizeof(float),
+-      state_node_dims, 3, ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT, &state_ort);
+-  if (status != nullptr) {
+-    const char *msg = ort_api->GetErrorMessage(status);
+-    fprintf(stderr, "CreateTensorWithDataAsOrtValue (state) failed: %s\n", msg);
+-    ort_api->ReleaseStatus(status);
+-    ort_api->ReleaseValue(input_ort);
+-    return;
++  float *speech_prob_ptr = nullptr;
++  float *stateN = nullptr;
++  check_vad_status(ort_api, ort_api->GetTensorMutableData(
++      values.outputs[0], (void **)&speech_prob_ptr));
++  check_vad_status(ort_api, ort_api->GetTensorMutableData(
++      values.outputs[1], (void **)&stateN));
++  if (!speech_prob_ptr || !stateN) {
++    throw std::runtime_error("Silero VAD missing output data");
+   }
+-
+-  // Create scalar tensor for sample rate (empty shape = scalar)
+-  status = ort_api->CreateTensorWithDataAsOrtValue(
+-      memory_info, &sr, sizeof(int64_t), nullptr, 0,
+-      ONNX_TENSOR_ELEMENT_DATA_TYPE_INT64, &sr_ort);
+-  if (status != nullptr) {
+-    const char *msg = ort_api->GetErrorMessage(status);
+-    fprintf(stderr, "CreateTensorWithDataAsOrtValue (sr) failed: %s\n", msg);
+-    ort_api->ReleaseStatus(status);
+-    ort_api->ReleaseValue(input_ort);
+-    ort_api->ReleaseValue(state_ort);
+-    return;
+-  }
+-
+-  ort_inputs.clear();
+-  ort_inputs.push_back(input_ort);
+-  ort_inputs.push_back(state_ort);
+-  ort_inputs.push_back(sr_ort);
+-
+-  // Prepare output OrtValue* array
+-  OrtValue *output_ort[2] = {nullptr, nullptr};
+-  status =
+-      ort_api->Run(session, nullptr, input_node_names.data(), ort_inputs.data(),
+-                   ort_inputs.size(), output_node_names.data(),
+-                   output_node_names.size(), output_ort);
+-
+-  if (status != nullptr) {
+-    const char *msg = ort_api->GetErrorMessage(status);
+-    fprintf(stderr, "Run failed: %s\n", msg);
+-    ort_api->ReleaseStatus(status);
+-    ort_api->ReleaseValue(input_ort);
+-    ort_api->ReleaseValue(state_ort);
+-    ort_api->ReleaseValue(sr_ort);
+-    return;
+-  }
+-
+-  float *speech_prob_ptr = nullptr;
+-  LOG_ORT_ERROR(ort_api, ort_api->GetTensorMutableData(
+-                             output_ort[0], (void **)&speech_prob_ptr));
+-  float speech_prob = speech_prob_ptr[0];
+-
+-  float *stateN = nullptr;
+-  LOG_ORT_ERROR(ort_api,
+-                ort_api->GetTensorMutableData(output_ort[1], (void **)&stateN));
+-  std::memcpy(_state.data(), stateN, size_state * sizeof(float));
+-
+-  // Update context with last context_samples samples of the full input
+-  std::copy(input.end() - context_samples, input.end(), _context.begin());
+-
+-  // Set output values
++  const float speech_prob = speech_prob_ptr[0];
++  std::copy(stateN, stateN + state.recurrent.size(), state.recurrent.begin());
++  std::copy(input.end() - context_samples, input.end(), state.context.begin());
+   if (out_probability) *out_probability = speech_prob;
+   if (out_flag) *out_flag = (speech_prob >= threshold) ? 1 : 0;
+-
+-  // Release OrtValues
+-  ort_api->ReleaseValue(input_ort);
+-  ort_api->ReleaseValue(state_ort);
+-  ort_api->ReleaseValue(sr_ort);
+-  ort_api->ReleaseValue(output_ort[0]);
+-  ort_api->ReleaseValue(output_ort[1]);
+ }
+diff --git a/core/voice-activity-detector.h b/core/voice-activity-detector.h
+--- a/core/voice-activity-detector.h
++++ b/core/voice-activity-detector.h
+@@ -27,9 +27,10 @@
+   const size_t look_behind_sample_count;
+   const size_t max_segment_sample_count;
+ 
+-  // Raw pointer intentionally not deleted to avoid static destruction order
+-  // issues
+-  static SileroVad *silero_vad;
++  // Shared model, but never shared recurrent/context history.
++  SileroVad *silero_vad;
++  SileroVad::State silero_state;
++  static SileroVad *shared_silero_vad();
+ 
+   bool _is_active;
+   std::vector<float> probability_window;
+diff --git a/core/voice-activity-detector.cpp b/core/voice-activity-detector.cpp
+--- a/core/voice-activity-detector.cpp
++++ b/core/voice-activity-detector.cpp
+@@ -17,9 +17,12 @@
+ }
+ }  // namespace
+ 
+-// Intentionally leaked to avoid static destruction order issues with ONNX
+-// Runtime
+-SileroVad *VoiceActivityDetector::silero_vad = nullptr;
++SileroVad *VoiceActivityDetector::shared_silero_vad() {
++  // C++ local-static initialization is synchronized and retries after failure.
++  // Retained to avoid ONNX Runtime static destruction ordering.
++  static SileroVad *const model = new SileroVad();
++  return model;
++}
+ 
+ VoiceActivityDetector::VoiceActivityDetector(float threshold,
+                                              int32_t window_size,
+@@ -30,11 +33,8 @@
+       window_size(window_size),
+       hop_size(hop_size),
+       look_behind_sample_count(look_behind_sample_count),
+-      max_segment_sample_count(max_segment_sample_count) {
+-  // We only want a single, global instance of silero_vad
+-  if (VoiceActivityDetector::silero_vad == nullptr) {
+-    VoiceActivityDetector::silero_vad = new SileroVad();
+-  }
++      max_segment_sample_count(max_segment_sample_count),
++      silero_vad(shared_silero_vad()) {
+ 
+   probability_window.resize(window_size);
+   probability_window_index = 0;
+@@ -48,15 +48,18 @@
+ VoiceActivityDetector::~VoiceActivityDetector() {}
+ 
+ void VoiceActivityDetector::start() {
+-  _is_active = true;
++  // New session only. Same-stream Pause must not call start().
++  _is_active = false;
++  silero_state.reset();
+   samples_processed_count = 0;
+   segments.clear();
+   current_segment_audio_buffer.resize(0);
+-  look_behind_audio_buffer.resize(look_behind_sample_count, 0.0f);
++  look_behind_audio_buffer.assign(look_behind_sample_count, 0.0f);
+   processing_remainder_audio_buffer.resize(0);
+-  probability_window.resize(window_size, 0.0f);
++  probability_window.assign(window_size, 0.0f);
+   probability_window_index = 0;
+   previous_is_voice = false;
++  _is_active = true;
+ }
+ 
+ void VoiceActivityDetector::stop() {
+@@ -152,7 +155,8 @@
+     {
+       std::lock_guard<std::mutex> lock(vad_mutex);
+       int current_flag;
+-      silero_vad->predict(audio_vec, &current_probability, &current_flag);
++      silero_vad->predict(audio_vec, silero_state,
++                          &current_probability, &current_flag);
+     }
+     probability_window[probability_window_index] = current_probability;
+     probability_window_index =
+@@ -194,7 +198,7 @@
+                                         audio_data + audio_data_size);
+     on_voice_end();
+     current_segment_audio_buffer.resize(0);
+-    look_behind_audio_buffer.resize(look_behind_sample_count, 0.0f);
++    look_behind_audio_buffer.assign(look_behind_sample_count, 0.0f);
+   } else if (current_is_voice && previous_is_voice) {
+     current_segment_audio_buffer.insert(current_segment_audio_buffer.end(),
+                                         audio_data,

@@ -103,7 +103,12 @@ def main():
             if digest((a.artifact_root / name).read_bytes()) != h:
                 raise SystemExit("Artifact mismatch: " + name)
             results["inputs"][name] = h
-        for patch in sorted(HERE.glob("*.patch")):
+        # Core patch 0004 requires separate inputs/builds; a JNI-only repack
+        # must never imply that it contains the per-stream VAD fix.
+        for patch in [HERE / name for name in [
+                "0001-streaming-jni-lifetime.patch",
+                "0002-checked-java-and-explicit-update.patch",
+                "0003-required-jni-path-safety.patch"]]:
             results["inputs"][patch.name] = digest(patch.read_bytes())
             run(["git", "apply", "--check", patch], out / "patched",
                 patch.stem + "-check", results)
