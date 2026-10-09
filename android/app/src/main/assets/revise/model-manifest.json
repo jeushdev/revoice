@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "complete": true,
+  "moonshine": {
+    "sdkVersion": "0.1.5",
+    "sourceRevision": "234f60faa0eb388b01cdf7e60aca232af37aefda",
+    "architecture": "MOONSHINE_MODEL_ARCH_TINY_STREAMING",
+    "language": "en",
+    "metadataSource": "https://raw.githubusercontent.com/moonshine-ai/moonshine/234f60faa0eb388b01cdf7e60aca232af37aefda/core/moonshine-model-file-metadata.generated.cpp"
+  },
+  "gemma": {
+    "runtimeVersion": "0.18.0",
+    "repository": "litert-community/Gemma3-1B-IT",
+    "revision": "a6306a4e292016480083b73b8dc6f3f939ae04c3",
+    "quantization": "INT4",
+    "metadataSource": "https://huggingface.co/api/models/litert-community/Gemma3-1B-IT/revision/a6306a4e292016480083b73b8dc6f3f939ae04c3?blobs=true"
+  },
+  "files": [
+    {
+      "path": "models/stt/adapter.ort",
+      "bytes": 1319664,
+      "crc32c": "kwQ+Bw==",
+      "sha256": "22ecc949e146c49667fda28d102d4e30749a107dc88a396292aa8f277ef1347c",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/adapter.ort",
+      "verified": true
+    },
+    {
+      "path": "models/stt/cross_kv.ort",
+      "bytes": 1287544,
+      "crc32c": "76wzFQ==",
+      "sha256": "143a36667b8d05fd9d04e8c337b7ee121f37ef299aea6b3d82bdb3d3401950b4",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/cross_kv.ort",
+      "verified": true
+    },
+    {
+      "path": "models/stt/decoder_kv.ort",
+      "bytes": 32583720,
+      "crc32c": "KJjeNw==",
+      "sha256": "8852553f312adb6c9aa4d17418015049b30f412209ee569d336548c0044627de",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/decoder_kv.ort",
+      "verified": true
+    },
+    {
+      "path": "models/stt/encoder.ort",
+      "bytes": 7675440,
+      "crc32c": "UjAIpQ==",
+      "sha256": "a8414e1a5dedf9f2093d7680601dd8a9b0433e7020260eafe0e370ead91134ca",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/encoder.ort",
+      "verified": true
+    },
+    {
+      "path": "models/stt/frontend.model.ort",
+      "bytes": 23344,
+      "crc32c": "aM/+wQ==",
+      "sha256": "5121b561417b638afce0c6c31b760e37c93cf97f80d9b0031aad1fe7b6f25d61",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/frontend.model.ort",
+      "verified": true
+    },
+    {
+      "path": "models/stt/frontend.weights.ort",
+      "bytes": 2093464,
+      "crc32c": "WYZ7EQ==",
+      "sha256": "217da24ac6f522ebf02da8ef288e77d1ac68d50d4a6821433182e4fbf4204bbd",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/frontend.weights.ort",
+      "verified": true
+    },
+    {
+      "path": "models/stt/streaming_config.json",
+      "bytes": 509,
+      "crc32c": "HGL0Ug==",
+      "sha256": "74fe5ddebd63b17caf59e8a3b18c17547ff7bce1642050edbb1c3962674f8950",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/streaming_config.json",
+      "verified": true
+    },
+    {
+      "path": "models/stt/tokenizer.bin",
+      "bytes": 249974,
+      "crc32c": "B7s10Q==",
+      "sha256": "6884b35fd6377d4c4d32336a0bc152f36b64d1e45b6503683cdc238250a8472d",
+      "url": "https://download.moonshine.ai/model/tiny-streaming-en/quantized_26_08_21/tokenizer.bin",
+      "verified": true
+    },
+    {
+      "path": "models/diarization/segmentation.ort",
+      "bytes": 1594080,
+      "crc32c": "hcqhEA==",
+      "sha256": "9715e3996ef181252aa1cc0c9398060f42b2c984c2fb65e3604262555e2efb1a",
+      "url": "https://download.moonshine.ai/model/diarization-community1/segmentation.ort",
+      "verified": true
+    },
+    {
+      "path": "models/diarization/embedding.ort",
+      "bytes": 6975920,
+      "crc32c": "r5LVbQ==",
+      "sha256": "6e4af7d49562e6e7042672e444d6394935cb2c23c3a7dd4919da45922b91735b",
+      "url": "https://download.moonshine.ai/model/diarization-community1/embedding.ort",
+      "verified": true
+    },
+    {
+      "path": "models/llm/gemma3-1b-it-int4.litertlm",
+      "bytes": 584417280,
+      "sha256": "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
+      "url": "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/a6306a4e292016480083b73b8dc6f3f939ae04c3/gemma3-1b-it-int4.litertlm",
+      "verified": true
+    }
+  ],
+  "totalRequiredBytes": 638220939,
+  "verifiedBytes": 638220939
+}
