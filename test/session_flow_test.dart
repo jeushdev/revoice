@@ -116,7 +116,9 @@ void main() {
     await summary.ask(deadlines);
     expect(deadlines.status, QuestionStatus.answered);
     expect(deadlines.answer, contains('Sam: demo deck by Friday morning'));
-    expect(deadlines.sources, ['s-0003', 's-0004', 's-0005', 's-0007']);
+    // Sources are found from the answer's words (the model's own list is not trusted).
+    expect(deadlines.sources, isNotEmpty);
+    expect(deadlines.sources.length, lessThanOrEqualTo(2));
     expect(summary.asked, [deadlines]);
     expect(summary.plainText(), contains('What are the deadlines?'));
 

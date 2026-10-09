@@ -2,6 +2,15 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../ai/meeting_parsing.dart'
+    show
+        foundAnswerGrammar,
+        findEvidence,
+        inventsName,
+        nothingToAnswerFrom,
+        speakerMatchGrammar,
+        suggestedQuestionsGrammar,
+        summaryTextGrammar;
 import '../engine/caption_engine.dart';
 import '../engine/engine_events.dart';
 import '../engine/llm_lock.dart';
@@ -121,29 +130,51 @@ class SummaryController extends ChangeNotifier {
     if (!asked.contains(q)) asked.add(q);
     notifyListeners();
     try {
-      final out = await _json(_answerPrompt(q.text), maxTokens: 320);
-      final found = out['found'] == true;
-      final answer = (out['answer'] as String?)?.trim() ?? '';
-      if (found && answer.isEmpty) {
-        throw const FormatException('empty answer');
+      final lineText = {for (final l in session.finals) l.id: l.text};
+      final known =
+          '${lineText.values.join(' ')} ${session.speakerNames.values.map((n) => n.name).join(' ')}';
+      // The conversation never uses any word of the question: say so without asking the model.
+      if (nothingToAnswerFrom(q.text, known)) {
+        _setNotFound(q);
+      } else {
+        final out = await _json(
+          _answerPrompt(q.text),
+          maxTokens: 320,
+          grammar: foundAnswerGrammar(lineText.keys),
+        );
+        final answer = (out['answer'] as String?)?.trim() ?? '';
+        final said = out['found'];
+        // The grammar always writes "found"; be lenient if it ever arrives as text.
+        var found = said == true || '$said'.toLowerCase() == 'true' || '$said'.toLowerCase() == 'yes';
+        if (found && answer.isEmpty) throw const FormatException('empty answer');
+        // Citations come from the words of the answer, not from the model; an answer that no line
+        // supports, or that names something nobody said, is "not mentioned".
+        final sources = found ? findEvidence(answer, lineText) : const <String>[];
+        if (found && (sources.isEmpty || inventsName(answer, '$known ${q.text}'))) found = false;
+        if (found) {
+          q
+            ..found = true
+            ..answer = answer
+            ..sources = sources
+            ..status = QuestionStatus.answered;
+        } else {
+          _setNotFound(q);
+        }
       }
-      final known = {for (final s in session.finals) s.id};
-      q
-        ..found = found
-        ..answer = found ? answer : null
-        ..sources = found
-            ? [
-                for (final id in (out['sources'] as List? ?? const []))
-                  if (id is String && known.contains(id)) id,
-              ]
-            : const []
-        ..status = QuestionStatus.answered;
     } on Object catch (e) {
       q
         ..status = QuestionStatus.failed
         ..error = _message(e);
     }
     notifyListeners();
+  }
+
+  void _setNotFound(SuggestedQuestion q) {
+    q
+      ..found = false
+      ..answer = null
+      ..sources = const []
+      ..status = QuestionStatus.answered;
   }
 
   /// Puts an answered question back among the chips.
@@ -192,7 +223,7 @@ class SummaryController extends ChangeNotifier {
   }
 
   Future<void> _matchSpeakers() async {
-    final out = await _json(_matchPrompt(), maxTokens: 160);
+    final out = await _json(_matchPrompt(), maxTokens: 160, grammar: speakerMatchGrammar);
     final map = out['speakers'];
     if (map is! Map) throw const FormatException('speakers is not an object');
     final allowed = {for (final n in session.expectedNames) n.toLowerCase(): n};
@@ -209,14 +240,14 @@ class SummaryController extends ChangeNotifier {
   }
 
   Future<void> _summarize() async {
-    final out = await _json(_summaryPrompt(), maxTokens: 220);
+    final out = await _json(_summaryPrompt(), maxTokens: 220, grammar: summaryTextGrammar);
     final text = (out['summary'] as String?)?.trim() ?? '';
     if (text.isEmpty) throw const FormatException('empty summary');
     summary = text;
   }
 
   Future<void> _suggest() async {
-    final out = await _json(_questionsPrompt(), maxTokens: 160);
+    final out = await _json(_questionsPrompt(), maxTokens: 160, grammar: suggestedQuestionsGrammar);
     final list = out['questions'];
     if (list is! List) throw const FormatException('questions is not a list');
     final seen = <String>{};
@@ -224,6 +255,8 @@ class SummaryController extends ChangeNotifier {
       if (q is! String) continue;
       final t = q.trim();
       if (t.isEmpty || t.length > 90 || !t.endsWith('?')) continue;
+      // A question the conversation cannot answer is not worth suggesting.
+      if (nothingToAnswerFrom(t, _knownText())) continue;
       if (seen.add(t.toLowerCase())) questions.add(SuggestedQuestion(t));
       if (questions.length == 5) break;
     }
@@ -233,11 +266,16 @@ class SummaryController extends ChangeNotifier {
   Future<Map<String, Object?>> _json(
     String prompt, {
     int maxTokens = 256,
+    String? grammar,
   }) async {
     FormatException? last;
     for (var attempt = 1; attempt <= 2; attempt++) {
       final raw = await lock.run(
-        () => engine.generate(prompt: prompt, maxTokens: maxTokens),
+        () => engine.generate(
+          prompt: prompt,
+          maxTokens: maxTokens,
+          jsonGrammar: grammar,
+        ),
       );
       try {
         return _parse(raw);
@@ -247,6 +285,10 @@ class SummaryController extends ChangeNotifier {
     }
     throw last!;
   }
+
+  /// Every word of the transcript plus the speaker names.
+  String _knownText() =>
+      '${session.finals.map((l) => l.text).join(' ')} ${session.speakerNames.values.map((n) => n.name).join(' ')}';
 
   static Map<String, Object?> _parse(String raw) {
     final start = raw.indexOf('{');

@@ -109,6 +109,35 @@ id ::= ${_idRule(ids)}
 $_stringRule
 ''';
 
+// Grammars for SummaryController's four prompts. The generic "any JSON" grammar lets the model
+// leave out keys (for example "found"), which the Ask path then read as "not mentioned".
+const summaryTextGrammar = '''
+root ::= "{\\"summary\\": " string "}"
+$_stringRule
+''';
+
+const speakerMatchGrammar = '''
+root ::= "{\\"speakers\\": {" (pair (", " pair)*)? "}}"
+pair ::= "\\"" [0-9]+ "\\": " nullable-string
+$_stringRule
+$_nullableRule
+''';
+
+const suggestedQuestionsGrammar = '''
+root ::= "{\\"questions\\": [" string (", " string){2,4} "]}"
+$_stringRule
+''';
+
+/// {"found": bool, "answer": "...", "sources": [ids]} with only real segment ids.
+String foundAnswerGrammar(Iterable<String> ids) =>
+    '''
+root ::= "{\\"found\\": " bool ", \\"answer\\": " string ", \\"sources\\": " ids "}"
+bool ::= "true" | "false"
+ids ::= "[" (id (", " id){0,3})? "]"
+id ::= ${_idRule(ids)}
+$_stringRule
+''';
+
 const questionsGrammar = '''
 root ::= "{\\"questions\\": [" string ", " string ", " string "]}"
 $_stringRule
@@ -152,6 +181,8 @@ const _stopwords = {
   'should', 'have', 'has', 'had', 'not', 'but', 'you', 'your', 'they', 'their', 'them', 'there',
   'then', 'than', 'from', 'about', 'into', 'out', 'who', 'what', 'when', 'where', 'which', 'how',
   'why', 'can', 'did', 'does', 'say', 'said', 'also', 'its', 'our', 'his', 'her', 'she', 'him',
+  'took', 'part', 'deadline', 'deadlines', 'decision', 'decisions', 'agreed', 'happen', 'happens',
+  'topic', 'topics', 'main', 'people', 'participants', 'point', 'points', 'next', 'steps', 'summary',
   'mentioned', 'discussed', 'conversation', 'meeting', 'speaker', 'discuss', 'talk', 'talked',
 };
 
@@ -167,6 +198,15 @@ Set<String> _contentWords(String text) => {
   for (final m in RegExp(r"[a-z0-9]+").allMatches(text.toLowerCase().replaceAll("'", '')))
     if (m.group(0)!.length >= 3 && !_stopwords.contains(m.group(0))) _stem(m.group(0)!),
 };
+
+/// True when the question has content words and NONE of them (nor a form of them) appears in
+/// [knownText]: the conversation cannot answer it ("Did they talk about delivery?" when nobody
+/// said "delivery"). Decided by a rule, not by the model.
+bool nothingToAnswerFrom(String question, String knownText) {
+  final asked = _contentWords(question);
+  if (asked.isEmpty) return false;
+  return asked.intersection(_contentWords(knownText)).isEmpty;
+}
 
 /// Finds the transcript turns that really contain [claim]'s words (the 1.5B model's own citations
 /// are unreliable). [turnText] maps turn id to its text, in time order. Returns up to 2 ids, the
@@ -191,11 +231,14 @@ List<String> findEvidence(String claim, Map<String, String> turnText) {
 /// adds such details ("December 12th" for "the twelfth"); a claim with an invented name is dropped.
 bool inventsName(String claim, String knownText) {
   final known = knownText.toLowerCase();
-  final words = claim.split(RegExp(r'\s+'));
-  for (var i = 1; i < words.length; i++) {
-    final w = words[i].replaceAll(RegExp(r"^[^A-Za-z]+|[^A-Za-z]+$|'s$"), '');
-    if (w.length < 3 || w[0] != w[0].toUpperCase() || w[0] == w[0].toLowerCase()) continue;
-    if (!known.contains(w.toLowerCase())) return true;
+  // The first word of every line or sentence is capitalised anyway, so it says nothing.
+  for (final part in claim.split(RegExp(r'\n|(?<=[.?!])\s+'))) {
+    final words = part.trim().replaceFirst(RegExp(r'^[-*\u2022]\s*'), '').split(RegExp(r'\s+'));
+    for (var i = 1; i < words.length; i++) {
+      final w = words[i].replaceAll(RegExp(r"^[^A-Za-z]+|[^A-Za-z]+$|'s$"), '');
+      if (w.length < 3 || w[0] != w[0].toUpperCase() || w[0] == w[0].toLowerCase()) continue;
+      if (!known.contains(w.toLowerCase())) return true;
+    }
   }
   return false;
 }

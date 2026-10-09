@@ -9,6 +9,16 @@ import 'package:revise/engine/caption_engine.dart';
 import 'package:revise/engine/engine_events.dart';
 import 'package:revise/session/session_controller.dart';
 
+const anyJsonGrammar = r'''
+root ::= object
+value ::= object | array | string | number | ("true" | "false" | "null") ws
+object ::= "{" ws (string ":" ws value ("," ws string ":" ws value)*)? "}" ws
+array ::= "[" ws (value ("," ws value)*)? "]" ws
+string ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4}))* "\"" ws
+number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
+ws ::= | " " | "\n" [ \t]{0,20}
+''';
+
 class MacLlmEngine implements CaptionEngine {
   MacLlmEngine(this.dir);
   final Directory dir;
@@ -39,7 +49,9 @@ class MacLlmEngine implements CaptionEngine {
   @override
   Future<String> generate({required String prompt, int maxTokens = 512, bool json = true, String? system, Object? jsonGrammar, String? requestId}) {
     calls.add('generate');
-    return _run(prompt, system: system ?? 'You are a precise assistant.', grammar: jsonGrammar as String?);
+    // Same as the native plugin: json (default) means "any valid JSON" grammar.
+    final grammar = jsonGrammar is String ? jsonGrammar : (jsonGrammar == true || (jsonGrammar == null && json) ? anyJsonGrammar : null);
+    return _run(prompt, system: system ?? 'You are a precise assistant. Follow the instructions exactly.', grammar: grammar);
   }
 
   @override
