@@ -6,12 +6,12 @@ Oct 9, 2026 · @Jairus Macabuhay · Team LarpCode · AppBuildersPH Hackathon 202
 
 **ReVise** is a phone app that live-captions face-to-face conversations. It labels who is speaking, switches the labels to real names when names come up, and ends with a final transcript plus an auto-generated CRM card for each named speaker. **All AI runs on the phone and works offline. The app uploads no audio or text; text leaves the app only when the user chooses Copy or Share.**
 
-**Document status:** implementation specification reviewed on October 9, 2026. Device integration, performance, model selection, and submission disclosures still require the checks below; this document is not evidence of a working build. The product name and channel prefix are **ReVise** / `revise`; the checkout folder is `revoice`.
+**Document status:** implementation specification reviewed on October 9, 2026. The Android model/runtime decision is approved: Moonshine Tiny Streaming with speaker identification, and Gemma 3 1B INT4 through LiteRT-LM. Device integration, performance, release compatibility, and submission disclosures still require the checks below; this document is not evidence of a working build. The product name and channel prefix are **ReVise** / `revise`; the checkout folder is `revoice`. See [the Android implementation plan](ANDROID_IMPLEMENTATION_PLAN.md) for the approved decisions, proposed files, milestones, and verification gates.
 
 - **Goal:** secure (local only), available offline, reliable transcript.
 - **Use cases:** meetings, classrooms, interviews, personal conversations.
 - **Language:** English for v1. Taglish is a later improvement.
-- **Demo platforms:** iPhone 14 Pro Max (reported iOS 27.0.1) and Redmi Note 14 Pro 5G (reported Android 16). Native owners verify actual OS versions and Android RAM before testing. The stage demo uses whichever works best by 6 AM PHT on October 10.
+- **Demo platforms:** iPhone 14 Pro Max (reported iOS 27.0.1) and Redmi Note 14 Pro 5G (reported Android 16 and 16 GB RAM). Native owners verify actual OS versions and physical Android RAM before testing. Prioritize a small Android installation and memory footprint even on the reported 16 GB device. The stage demo uses whichever works best by 6 AM PHT on October 10.
 - **Deadline:** team-reported submission cutoff is 10:00 AM on October 10, with one submission and no edits afterward. Jairus confirms the official portal, timezone, and current rules before submission; the timeline assumes PHT (UTC+8).
 
 ## 2. Why local AI (for the submission form)
@@ -110,11 +110,11 @@ Oct 9, 2026 · @Jairus Macabuhay · Team LarpCode · AppBuildersPH Hackathon 202
 
 | Part | iPhone 14 Pro Max | Redmi Note 14 Pro 5G |
 | :---- | :---- | :---- |
-| Speech-to-text and speakers | Moonshine Voice Swift SDK (Small Streaming; Tiny if slow) | Moonshine Voice Android SDK (Small Streaming; Tiny if slow) |
-| CRM LLM | llama.cpp or MLX Swift with Qwen 2.5 1.5B Instruct Q4 or Gemma 3 1B in a compatible format. **The iPhone 14 Pro Max is not eligible for Apple Intelligence.** | Gemma 4 E2B via LiteRT-LM, or Qwen 2.5 1.5B via llama.cpp; choose from measured memory and latency on the actual device |
-| Fallback STT | whisper.cpp `base.en` | whisper.cpp `base.en` |
+| Speech-to-text and speakers | Moonshine Voice Swift SDK (Small Streaming; Tiny if slow) | **Approved:** Moonshine Voice Android SDK, English **Tiny Streaming**, with bundled diarization assets |
+| CRM LLM | llama.cpp or MLX Swift with Qwen 2.5 1.5B Instruct Q4 or Gemma 3 1B in a compatible format. **The iPhone 14 Pro Max is not eligible for Apple Intelligence.** | **Approved:** **Gemma 3 1B INT4**, `gemma3-1b-it-int4.litertlm`, through **LiteRT-LM Kotlin** |
+| Fallback STT | whisper.cpp `base.en` | whisper.cpp `base.en` only after a failed Moonshine gate and an explicit plan revision |
 
-These are candidate models and runtimes, not verified selections. Each native owner pins one working runtime, SDK version, model revision, quantization, and license after an on-device spike. Record model size, peak memory, caption latency with speaker identification enabled, and CRM duration. Do not present an unmeasured speed or integration time as a guarantee.
+The Android product choices are approved, but their compatibility and performance are unverified. Initial Android dependency pins are `ai.moonshine:moonshine-voice:0.1.5` and `com.google.ai.edge.litertlm:litertlm-android:0.18.0`; the implementation plan records the Gemma revision and checksum. Confirm these exact artifacts on the phone before integration. The iOS choices remain candidates owned by Zairus. Each native owner records the exact working runtime, SDK version, model revision, quantization, and license after an on-device spike. Record model size, peak memory, caption latency with speaker identification enabled, and CRM duration. Do not present an unmeasured speed or integration time as a guarantee. Changing the approved Android model family or shared contract requires a new decision, rather than an automatic fallback substitution.
 
 Moonshine speaker identification requires separate diarization assets. Bundle the STT, diarization, and LLM assets in the demo installation and use local-file loaders; disable automatic SDK downloads. Missing assets must produce a visible error rather than trigger a network request. See the official sources in section 14.
 
@@ -141,6 +141,7 @@ The array illustrates two separate event maps; native sends one map per event, n
 
 - `state` values: `ready`, `listening`, `paused`, `stopped`, `error`.
 - Partial events replace the whole current text for the same `segmentId`; text may shrink or change. The final event fixes text, timestamps, and speaker attribution, and that segment is never revised afterward. Ignore duplicate final events.
+- **Approved v1 speaker policy:** Moonshine can revise speaker spans after its line-completed callback. The Android adapter snapshots the attribution when it emits the app's final caption and ignores later revisions for that segment. This may preserve an attribution error. Missing, ambiguous, overlapping, or multi-speaker attribution remains `speakerId=0`; it must not be guessed. Snapshot primitive values rather than retaining mutable SDK line objects. This policy preserves the shared channel contract and must be disclosed in the demo limitations.
 - `speakerId` is a stable app-level integer within a session, starting at 1; `0` means unknown. Native adapters normalize SDK IDs into this convention and use unknown when attribution is unavailable.
 - `segmentId` is unique within a session. Timestamps are integer milliseconds from session start, with `0 <= tStartMs <= tEndMs`; paused time remains part of elapsed session time. Display final segments in timestamp order.
 - Only one session may be active. Clear mappings on a new session and prevent events from a stopped session from entering the new one.
@@ -251,15 +252,16 @@ Milestones are targets, not completed work. Publication, posting, and submission
 
 | Risk | Fallback |
 | :---- | :---- |
-| Moonshine SDK integration fails on a platform | whisper.cpp `base.en` behind the same contract; diarization needs a separate working path or the disclosed manual-speaker fallback |
+| Moonshine SDK integration fails on a platform | Report the failed gate; propose whisper.cpp `base.en` behind the same contract. Android substitution needs an explicit plan revision; diarization needs a separate working path or the disclosed manual-speaker fallback. |
 | Speaker IDs unreliable | Tap-to-rename plus a manual "next speaker" button; Dart assigns an explicit speaker override from the next segment onward. This is a disclosed degraded mode, not a pass for automatic speaker labeling. |
-| LLM too slow or crashes on a phone | Try a smaller compatible model (Gemma 3 1B or Qwen 2.5 0.5B). Rule-based CRM is a disclosed degraded mode and does not pass F4's on-device LLM criterion. |
+| Android Gemma too slow, inaccurate, or crashes | First measure CPU execution, bounded context/output, and sequential model loading with the approved Gemma 3 1B INT4 file. Report a failed gate before proposing a different model/runtime. Rule-based CRM is a disclosed degraded mode and does not pass F4's on-device LLM criterion. |
+| iOS LLM too slow or crashes | Zairus may evaluate the listed smaller compatible candidates; record the exact working selection and limitations. |
 | SDK/model license or redistribution requirements unclear | Check the license for each pinned SDK and every bundled STT, diarization, and LLM asset; include required notices and disclose them before distribution |
 | Only one platform works | Demo that one; mention the other as "in progress" |
 
 ## 13. Submission disclosures (Sam to fill in)
 
-- **Models:** Moonshine Voice (STT and speaker ID), the CRM LLM (exact name and quantization), any fallback used.
+- **Models:** Android Moonshine English Tiny Streaming plus diarization assets, Android Gemma 3 1B INT4, the exact iOS selections, and any approved fallback actually used. Record revisions and checksums.
 - **Frameworks:** Flutter, Moonshine SDKs, llama.cpp / MLX / LiteRT-LM.
 - **APIs and cloud:** none at runtime. Internet is used during development to obtain model assets; the demo installation includes them and needs no first-run download.
 - **Existing code and assets:** list any SDK sample code reused.
@@ -274,7 +276,8 @@ Official sources checked during this review on October 9, 2026:
 - [Moonshine Voice repository and license](https://github.com/moonshine-ai/moonshine): platform support and SDK/model licensing. Pin the exact version used.
 - [Moonshine diarization assets](https://github.com/moonshine-ai/moonshine/blob/main/docs/diarization-models.md): speaker identification requires separate assets; some high-level loaders automatically fetch them.
 - [Apple Intelligence device requirements](https://support.apple.com/en-us/121115): the iPhone 14 Pro Max is not eligible.
-- [Gemma model overview](https://ai.google.dev/gemma/docs/core) and [LiteRT-LM](https://github.com/google-ai-edge/LiteRT-LM): Android candidate model/runtime documentation; compatibility and speed still require the device spike.
+- [Gemma 3 1B deployment files](https://huggingface.co/litert-community/Gemma3-1B-IT/tree/main) and [LiteRT-LM Kotlin API](https://github.com/google-ai-edge/LiteRT-LM/blob/v0.18.0/docs/api/kotlin/getting_started.md): approved Android model/runtime; compatibility and speed still require the device spike.
+- [Moonshine transcription events](https://github.com/moonshine-ai/moonshine/blob/v0.1.5/docs/using/transcription.md): speaker spans can change after line completion; the approved adapter freezes app-final attribution.
 - [llama.cpp grammars](https://github.com/ggml-org/llama.cpp/blob/master/grammars/README.md): constrained JSON generation; Dart still validates the content.
 
 **Ready to implement:** required feature scope, team ownership, automatic CRM behavior, shared contract, field evidence, failure paths, and verification criteria are defined. Native owners must confirm the SDK adapter and pin a compatible model/runtime before integrating that path. **Ready to demo or submit:** only after section 11 passes on the selected stage phone and section 13 is completed. Official event requirements are not independently verified by this document review.
