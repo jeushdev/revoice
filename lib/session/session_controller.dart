@@ -225,6 +225,8 @@ class SessionController extends ChangeNotifier {
     switch (event) {
       case CaptionEvent():
         _onCaption(event);
+      case SpeakerRevisionEvent():
+        _onSpeakerRevision(event);
       case StateEvent(:final state, :final message):
         this.state = state;
         if (state == EngineState.error) {
@@ -263,6 +265,21 @@ class SessionController extends ChangeNotifier {
       ..tEndMs = e.tEndMs
       ..isFinal = e.isFinal;
     if (e.isFinal) _applyNameRules(seg);
+  }
+
+  /// Moonshine changed its mind about who spoke a line. The original [Segment.speakerId] is
+  /// updated (it is Moonshine's label); anything the user chose (Switch speaker, tapped line)
+  /// is untouched because [speakerOf] prefers [Segment.manualSpeakerId].
+  void _onSpeakerRevision(SpeakerRevisionEvent e) {
+    final seg = _segments[e.segmentId];
+    if (seg == null || seg.speakerId == e.speakerId) return;
+    final wasUnknown = seg.speakerId == 0;
+    seg.speakerId = e.speakerId;
+    // A line that was Unknown when it finished never had its name rules applied ("Hi, I'm David"
+    // said before the voices were told apart). Now that it has a speaker, apply them once.
+    if (wasUnknown && seg.isFinal && seg.manualSpeakerId == null && state == EngineState.listening) {
+      _applyNameRules(seg);
+    }
   }
 
   void _applyNameRules(Segment seg) {

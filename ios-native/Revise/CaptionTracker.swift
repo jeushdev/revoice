@@ -36,6 +36,8 @@ final class CaptionTracker: @unchecked Sendable {
         var endMs: Int
     }
     private var held: [String: HeldFinal] = [:]
+    /// Speaker last sent for each finished line, so a later revision can be sent only if it differs.
+    private var sentSpeaker: [String: Int] = [:]
     /// Longest we wait for a speaker before giving up and sending the final as Unknown (0).
     private static let maxSpeakerWaitSeconds = 2.5
 
@@ -78,7 +80,14 @@ final class CaptionTracker: @unchecked Sendable {
         let line = event.line
         Self.logDiarization(event, line)
         let key = "\(run):\(line.lineId)"
-        if finalized.contains(key) { return }            // duplicate final, or late speaker revision
+        if finalized.contains(key) {
+            // The text, times and "final" status of a finished line never change. But Moonshine
+            // keeps refining WHO spoke it, so a changed speaker is sent as a separate small event.
+            if event is LineSpeakersChanged || event is LineUpdated {
+                reviseSpeaker(key: key, line: line)
+            }
+            return
+        }
 
         // Line already completed, waiting for its speaker: release it once spans show up.
         if held[key] != nil {
@@ -112,6 +121,7 @@ final class CaptionTracker: @unchecked Sendable {
         }
         if isFinal {
             finalized.insert(key)
+            sentSpeaker[key] = speakerId
             latest[key] = nil
         } else {
             latest[key] = Latest(text: text, speakerId: speakerId, startMs: startMs, endMs: endMs)
@@ -129,6 +139,7 @@ final class CaptionTracker: @unchecked Sendable {
         }
         for (key, value) in latest.sorted(by: { $0.value.startMs < $1.value.startMs }) {
             finalized.insert(key)
+            sentSpeaker[key] = value.speakerId
             send(segmentId(for: key), value.text, value.speakerId, true, value.startMs, value.endMs)
         }
         latest.removeAll()
@@ -143,9 +154,20 @@ final class CaptionTracker: @unchecked Sendable {
 
     // MARK: - Helpers (call with the lock held)
 
+    /// Sends {"type":"speaker", segmentId, speakerId} if Moonshine now attributes a finished
+    /// line to a different (known) speaker than the one we last sent.
+    private func reviseSpeaker(key: String, line: TranscriptLine) {
+        guard let old = sentSpeaker[key] else { return }
+        let new = appSpeakerId(for: line, assigningNew: true)
+        guard new != 0, new != old else { return }
+        sentSpeaker[key] = new
+        emit(["type": "speaker", "segmentId": segmentId(for: key), "speakerId": new])
+    }
+
     private func releaseHeld(_ key: String, speakerId: Int) {
         guard let value = held.removeValue(forKey: key) else { return }
         finalized.insert(key)
+        sentSpeaker[key] = speakerId
         send(segmentId(for: key), value.text, speakerId, true, value.startMs, value.endMs)
     }
 

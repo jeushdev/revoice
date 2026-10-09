@@ -140,4 +140,37 @@ void main() {
     session.setUseSuggestions(true);
     expect(session.displayName(2), 'Priya');
   });
+
+  test('speaker revision relabels a finished line; Unknown -> known applies the name rules', () async {
+    engine.caption('s-0001', "Hi, I'm David.", 0); // finished while Unknown
+    await pump();
+    expect(session.speakerNames, isEmpty);
+    expect(session.displayName(session.speakerOf(session.finals.single)), 'Unknown');
+
+    engine.controller.add(const SpeakerRevisionEvent(segmentId: 's-0001', speakerId: 1));
+    await pump();
+    expect(session.speakerOf(session.finals.single), 1);
+    expect(session.speakerNames[1]?.name, 'David', reason: 'name rule runs once the speaker is known');
+    expect(session.finals.single.text, "Hi, I'm David.", reason: 'text is never changed');
+  });
+
+  test('speaker revision never overrides Switch speaker or a tapped line', () async {
+    session.switchSpeaker(); // override = 2 for new lines
+    engine.caption('s-0001', 'Forced line.', 1);
+    engine.caption('s-0002', 'Tapped line.', 1);
+    await pump();
+    session.setLineSpeaker('s-0002', 1);
+    engine.controller.add(const SpeakerRevisionEvent(segmentId: 's-0001', speakerId: 3));
+    engine.controller.add(const SpeakerRevisionEvent(segmentId: 's-0002', speakerId: 3));
+    await pump();
+    expect(session.finals.map(session.speakerOf).toList(), [2, 1]);
+    expect(session.finals.map((s) => s.speakerId).toList(), [3, 3], reason: "Moonshine's own label does update");
+  });
+
+  test('speaker event parsing', () {
+    final ok = EngineEvent.fromMap({'type': 'speaker', 'segmentId': 's-0003', 'speakerId': 2});
+    expect(ok, isA<SpeakerRevisionEvent>());
+    expect(EngineEvent.fromMap({'type': 'speaker', 'segmentId': 's-0003'}), isNull);
+    expect(EngineEvent.fromMap({'type': 'speaker', 'speakerId': 2}), isNull);
+  });
 }

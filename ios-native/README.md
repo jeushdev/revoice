@@ -141,6 +141,22 @@ Future<String> generate({required String prompt, int maxTokens = 512, String? sy
 5. **CRM `follow_up`** must be a concrete action: prompt rule + code guard in `CrmEvidence.isConcreteAction` (greetings, thanks, goodbyes
    and time-only phrases like "next week" become null).
 
+### Contract addition: `speaker` event (speaker revisions)
+
+Moonshine keeps refining who spoke a line AFTER the line is finished (`LineSpeakersChanged` on a completed line). The caption
+contract still says a final never changes, so text, times and `isFinal` stay frozen; a changed speaker is sent as a separate event
+on `revise/captions`:
+
+```json
+{"type":"speaker","segmentId":"s-0007","speakerId":2}
+```
+
+Dart updates that line's Moonshine label (`Segment.speakerId`), leaves anything the user chose untouched (`manualSpeakerId`: Switch
+speaker / tapped line), and when a line goes Unknown -> known while still listening it applies the name rules once ("Hi, I'm David"
+said before the voices were told apart). Unknown event types are ignored, so Android can ignore this event or send its own.
+Moonshine has **no** "number of speakers" setting (checked the C API options, the Swift package and the diarizer config: only the
+three cadences exist), so a "2 speakers" option is not possible.
+
 ### Dart changes made on zrs/ios (for Jairus)
 
 - `lib/engine/caption_engine.dart`, `platform_caption_engine.dart`, `mock_caption_engine.dart`: new `generate({prompt, maxTokens, system, jsonGrammar})`

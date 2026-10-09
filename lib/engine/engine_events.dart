@@ -25,6 +25,11 @@ sealed class EngineEvent {
           tStartMs: start,
           tEndMs: end < start ? start : end,
         );
+      case 'speaker':
+        final id = raw['segmentId'];
+        final speaker = (raw['speakerId'] as num?)?.toInt();
+        if (id is! String || speaker == null || speaker < 0) return null;
+        return SpeakerRevisionEvent(segmentId: id, speakerId: speaker);
       case 'state':
         final state = EngineState.values
             .where((s) => s.name == raw['state'])
@@ -64,6 +69,15 @@ class CaptionEvent extends EngineEvent {
     'tStartMs': tStartMs,
     'tEndMs': tEndMs,
   };
+}
+
+/// Moonshine refined WHO spoke an already-finished line. Text, times and the final status
+/// never change; only the speaker does. Sent natively as {"type":"speaker", segmentId, speakerId}.
+class SpeakerRevisionEvent extends EngineEvent {
+  const SpeakerRevisionEvent({required this.segmentId, required this.speakerId});
+
+  final String segmentId;
+  final int speakerId;
 }
 
 class StateEvent extends EngineEvent {
