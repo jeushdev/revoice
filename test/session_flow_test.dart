@@ -289,8 +289,11 @@ void main() {
     final session = await recordFullMeeting(MockScenario.meeting, engine: engine);
     final summary = SummaryController(engine, session);
     await summary.run();
-    expect(summary.questions.map((q) => q.text).take(2), ['Who took part?', 'What did Sam agree to do?']);
-    expect(summary.questions, hasLength(3)); // filled up with a generic question
+    // The scripted model gives every question the same answer, so the second candidate is a
+    // duplicate suggestion and is dropped; generic questions fill up to three.
+    expect(summary.questions.first.text, 'Who took part?');
+    expect(summary.questions.map((q) => q.text), isNot(contains('What did Sam agree to do?')));
+    expect(summary.questions, hasLength(3));
     expect(summary.questions.map((q) => q.text), isNot(contains('What is the weather?')));
     expect(summary.questions.every((q) => q.cached != null && q.cached!.sources.isNotEmpty), isTrue);
     final calls = engine.calls;
