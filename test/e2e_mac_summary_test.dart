@@ -7,6 +7,7 @@ import 'package:revise/session/session_controller.dart';
 import 'package:revise/summary/summary_controller.dart';
 
 import 'e2e_mac_llm_test.dart' show MacLlmEngine;
+import 'speaker_split_test.dart' show build, labels, withIntros;
 
 const markAnna = <(int, String)>[
   (1, 'Hi Anna, thanks for meeting me.'),
@@ -58,4 +59,22 @@ void main() {
       print('ASK "$text" -> found=${q.found} ${q.answer} <- ${q.sources} err=${q.error}');
     }
   }, skip: skip, timeout: const Timeout(Duration(minutes: 10)));
+
+  for (final oneSpeaker in [true, false]) {
+    test('Mark/Anna through the session code, ${oneSpeaker ? 'ALL lines on ONE speaker id' : 'Moonshine separated them'}', () async {
+      final engine = MacLlmEngine(Directory.systemTemp.createTempSync());
+      final session = build(withIntros, oneSpeaker: oneSpeaker, names: ['Mark', 'Anna']);
+      session.applyPostStop(); // what Stop does to the labels
+      print('RUN ${oneSpeaker ? 'ONE-SPEAKER' : 'SEPARATED'}');
+      print('LABELS ${labels(session)}  (autoSplit=${session.autoSplitApplied}, moonshine ids=${session.finals.map((l) => l.speakerId).join()})');
+      final summary = SummaryController(engine, session);
+      await summary.run();
+      print('SUMMARY ${summary.summary}');
+      for (final q in summary.questions) {
+        final cached = q.cached;
+        print('SUGGESTED "${q.text}" -> ${cached == null ? '(not pre-answered)' : '${cached.found}: ${cached.answer} <- ${cached.sources}'}');
+      }
+      expect(summary.questions, isNotEmpty);
+    }, skip: skip, timeout: const Timeout(Duration(minutes: 10)));
+  }
 }

@@ -169,7 +169,10 @@ void main() {
     expect(session.displayName(2), 'Jeush'); // model said Sam, but speaker 2 never said so: no guessing
     expect(session.displayName(3), 'Sam'); // heard live, kept
     expect(session.speakerNames[3]!.source, NameSource.auto);
-    expect(summary.questions.map((q) => q.text), ['Who took part?']);
+    // The one valid model question comes first; generic questions fill up to three.
+    expect(summary.questions.first.text, 'Who took part?');
+    expect(summary.questions, hasLength(3));
+    expect({for (final q in summary.questions) q.text.toLowerCase()}, hasLength(3));
 
     final broken = ScriptedLlm({'summary': 'no json here'});
     final s2 = await recordFullMeeting(MockScenario.meeting, engine: broken);
@@ -286,7 +289,9 @@ void main() {
     final session = await recordFullMeeting(MockScenario.meeting, engine: engine);
     final summary = SummaryController(engine, session);
     await summary.run();
-    expect(summary.questions.map((q) => q.text), ['Who took part?', 'What did Sam agree to do?']);
+    expect(summary.questions.map((q) => q.text).take(2), ['Who took part?', 'What did Sam agree to do?']);
+    expect(summary.questions, hasLength(3)); // filled up with a generic question
+    expect(summary.questions.map((q) => q.text), isNot(contains('What is the weather?')));
     expect(summary.questions.every((q) => q.cached != null && q.cached!.sources.isNotEmpty), isTrue);
     final calls = engine.calls;
     await summary.ask(summary.questions.first);
@@ -303,6 +308,25 @@ void main() {
     expect(SummaryController.dropQuestions('How much is it?'), '');
   });
 
+
+  test('suggestions are never empty when the transcript has 3 or more lines', () async {
+    final engine = ScriptedLlm({
+      'match_speakers': '{"speakers": {}}',
+      'summary': '{"summary": "Short recap."}',
+      'questions': '{"questions": ["What is the weather?", "Why is the sky blue?"]}',
+      'answer': '{"found": false, "answer": "", "sources": []}', // nothing is ever supported
+    });
+    final session = await recordFullMeeting(MockScenario.meeting, engine: engine);
+    expect(session.finals.length, greaterThanOrEqualTo(3));
+    final summary = SummaryController(engine, session);
+    await summary.run();
+    expect(summary.questions, hasLength(3));
+    expect(summary.questions.every((q) => SummaryController.genericQuestions.contains(q.text)), isTrue);
+    // A tap answers normally (here: not mentioned).
+    await summary.ask(summary.questions.first);
+    expect(summary.questions.first.found, isFalse);
+    summary.dispose();
+  });
 }
 
 class _CountingLlm extends ScriptedLlm {

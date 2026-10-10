@@ -7,6 +7,7 @@ import '../engine/engine_events.dart';
 import '../engine/platform_caption_engine.dart';
 import '../transcript/clean_transcript.dart' show endsSentence, maxMergeGapMs, maxMergeWords;
 import 'name_rules.dart';
+import 'speaker_split.dart';
 import 'speaker_suggestions.dart';
 
 class Segment {
@@ -33,6 +34,10 @@ class Segment {
 
   /// Speaker suggested by the post-Stop on-device model. The original [speakerId] is kept.
   int? suggestedSpeakerId;
+
+  /// Speaker worked out automatically after Stop when Moonshine put two voices under one id
+  /// (see speaker_split.dart). Applied by default; [speakerId] keeps Moonshine's label.
+  int? autoSpeakerId;
 }
 
 /// auto: heard live (name rules). suggested: matched by the LLM after Stop
@@ -92,7 +97,10 @@ class SessionController extends ChangeNotifier {
   /// model's suggestion (if suggestions are on), else what Moonshine heard. [Segment.speakerId]
   /// itself is never overwritten.
   int speakerOf(Segment s) =>
-      s.manualSpeakerId ?? (useSuggestions ? s.suggestedSpeakerId : null) ?? s.speakerId;
+      s.manualSpeakerId ??
+      s.autoSpeakerId ??
+      (useSuggestions ? s.suggestedSpeakerId : null) ??
+      s.speakerId;
 
   /// Whether post-Stop speaker suggestions are shown. OFF by default: they are a rough guess
   /// offered only when the audio gave no speakers at all; the original labels are always kept.
@@ -125,6 +133,37 @@ class SessionController extends ChangeNotifier {
     // Offered, not applied: labels and names change only when the user turns the switch on.
     useSuggestions = false;
     _suggestionsApplied = true;
+  }
+
+  /// Test helper: the label repairs that run at Stop, without an engine.
+  @visibleForTesting
+  void applyPostStop() {
+    _applyAutoSplit();
+    _applySuggestions();
+  }
+
+  /// True when Stop found one speaker id holding two people and relabelled their lines.
+  bool autoSplitApplied = false;
+
+  /// Runs at Stop. If Moonshine merged two voices under one speaker, labels each line from the
+  /// text (self-introductions, being addressed by name, question and answer, short replies,
+  /// pauses). No user action. Moonshine's own labels stay in [Segment.speakerId]; a line the user
+  /// fixed by hand keeps the user's choice, and tap-to-fix still works on every line.
+  void _applyAutoSplit() {
+    final lines = finals;
+    final result = splitMergedSpeaker([
+      for (final s in lines) SplitLine(s.id, s.text, speakerOf(s), s.tStartMs, s.tEndMs),
+    ], expectedNames);
+    if (result == null) return;
+    for (final s in lines) {
+      final id = result.lineSpeaker[s.id];
+      if (id != null && s.manualSpeakerId == null) s.autoSpeakerId = id;
+    }
+    result.names.forEach((id, name) {
+      if (speakerNames[id]?.source == NameSource.manual) return; // the user's own names win
+      speakerNames[id] = SpeakerName(name, NameSource.auto);
+    });
+    autoSplitApplied = true;
   }
 
   /// Switch between the suggested labels/names and the original ones.
@@ -209,6 +248,7 @@ class SessionController extends ChangeNotifier {
     speakerNames.clear();
     liveSpeakerOverride = null;
     _suggestionsApplied = false;
+    autoSplitApplied = false;
     useSuggestions = false;
     _pendingCall = null;
     interrupted = false;
@@ -248,7 +288,8 @@ class SessionController extends ChangeNotifier {
     _clock.stop();
     // Unconfirmed partials are excluded from the transcript and summary.
     _segments.removeWhere((_, s) => !s.isFinal);
-    _applySuggestions(); // before CRM cards are generated, so cards use the suggested labels
+    _applyAutoSplit(); // fixes a merged speaker by itself, before the summary reads the labels
+    _applySuggestions();
     notifyListeners();
   }
 

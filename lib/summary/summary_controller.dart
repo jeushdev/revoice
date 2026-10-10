@@ -162,10 +162,8 @@ class SummaryController extends ChangeNotifier {
 
     if (steps[SummaryStep.suggesting] != StepStatus.done) {
       await _step(SummaryStep.suggesting, _suggest, fatal: false);
-      if (questions.isEmpty) {
-        await _keepAnswerable(fallbackQuestions.map(SuggestedQuestion.new).toList());
-        steps[SummaryStep.suggesting] = StepStatus.done;
-      }
+      await _fillGeneric(); // never leave the user with no suggestions
+      steps[SummaryStep.suggesting] = StepStatus.done;
     }
 
     status = SummaryStatus.done;
@@ -233,6 +231,46 @@ class SummaryController extends ChangeNotifier {
     return (found: true, answer: answer, sources: sources);
   }
 
+  /// General questions any conversation can answer, used to fill up the suggestions.
+  static const genericQuestions = [
+    'What were the main topics?',
+    'Were any deadlines mentioned?',
+    'What decisions were made?',
+    'Who took part?',
+    'What was it about?',
+  ];
+
+  /// Brings the suggestions up to [maxSuggested]: first generic questions whose answer the
+  /// transcript supports, then (with 3 or more lines) generic questions even without a
+  /// pre-answer, so the list is never empty. A tap on those answers normally.
+  Future<void> _fillGeneric() async {
+    if (questions.length >= maxSuggested) return;
+    final have = {for (final q in questions) q.text.toLowerCase()};
+    final unvalidated = <SuggestedQuestion>[];
+    for (final text in genericQuestions) {
+      if (questions.length >= maxSuggested) break;
+      if (have.contains(text.toLowerCase())) continue;
+      final q = SuggestedQuestion(text);
+      try {
+        final r = await _answerFor(text);
+        if (r.found) {
+          q.cached = r;
+          questions.add(q);
+          continue;
+        }
+      } on Object {
+        // fall through: kept as an unvalidated fallback
+      }
+      unvalidated.add(q);
+    }
+    if (session.finals.length >= 3) {
+      for (final q in unvalidated) {
+        if (questions.length >= maxSuggested) break;
+        questions.add(q);
+      }
+    }
+  }
+
   /// Answers candidate questions in the background and keeps only the supported ones, so every
   /// chip shown has a real answer behind it. At most [maxSuggested] are kept.
   Future<void> _keepAnswerable(List<SuggestedQuestion> candidates) async {
@@ -241,7 +279,9 @@ class SummaryController extends ChangeNotifier {
       if (kept.length == maxSuggested) break;
       try {
         final r = await _answerFor(q.text);
-        if (r.found) {
+        // Two questions with the very same answer are one suggestion.
+        final duplicate = kept.any((k) => k.cached?.answer == r.answer && k.cached?.sources.join() == r.sources.join());
+        if (r.found && !duplicate) {
           q.cached = r;
           kept.add(q);
         }
@@ -358,7 +398,7 @@ class SummaryController extends ChangeNotifier {
   }
 
   Future<void> _suggest() async {
-    final out = await _json(_questionsPrompt(), maxTokens: 160, grammar: suggestedQuestionsGrammar);
+    final out = await _json(_questionsPrompt(), maxTokens: 320, grammar: suggestedQuestionsGrammar);
     final list = out['questions'];
     if (list is! List) throw const FormatException('questions is not a list');
     final seen = <String>{};
@@ -370,7 +410,7 @@ class SummaryController extends ChangeNotifier {
       // A question the conversation cannot answer is not worth suggesting.
       if (nothingToAnswerFrom(t, _knownText())) continue;
       if (seen.add(t.toLowerCase())) candidates.add(SuggestedQuestion(t));
-      if (candidates.length == 5) break;
+      if (candidates.length == 8) break;
     }
     // Answer them now; only questions with a supported answer become chips.
     await _keepAnswerable(candidates);
@@ -522,7 +562,7 @@ ${_transcriptText()}
   String _questionsPrompt() =>
       '''
 TASK: questions
-Suggest 3 to 5 short questions a participant might ask about this conversation, such as what it was about, who took part, or what the deadlines are. Only suggest questions the transcript can answer.
+Suggest 6 to 8 short questions a participant might ask about this conversation, such as what it was about, who took part, or what the deadlines are. Only suggest questions the transcript can answer.
 Return only JSON: {"questions": ["<question>?"]}
 Rules:
 $_rules

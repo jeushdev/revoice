@@ -124,7 +124,7 @@ $_nullableRule
 ''';
 
 const suggestedQuestionsGrammar = '''
-root ::= "{\\"questions\\": [" string (", " string){2,4} "]}"
+root ::= "{\\"questions\\": [" string (", " string){5,7} "]}"
 $_stringRule
 ''';
 
