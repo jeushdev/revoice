@@ -1,6 +1,16 @@
 # ReVoice submission notes
 
-Team LarpCode, AppBuildersPH Hackathon 2026 (Local AI). Fill the items marked TODO before submitting.
+Team LarpCode, AppBuildersPH Hackathon 2026 (Local AI). The current product overview and checklist disclosures are in [README.md](README.md). Remaining TODOs below are verification items, not claims of completed testing.
+
+## Project and proof
+
+- **Project:** ReVoice — offline live captions, speaker labels, transcripts, on-device summaries and conversation Q&A.
+- **Team:** Jairus Macabuhay, Zairus Jay Opinion, Jeush (@jeushdev), Samuel Ordiales.
+- **Repository:** https://github.com/jeushdev/revoice — working submission code on `main`, sourced from `zrs/ios`.
+- **Demo video:** https://www.youtube.com/watch?v=KkFTXzSQAEE
+- **LinkedIn submission post:** https://lnkd.in/p/g9My36rK
+- **Screenshots:** [docs/screenshots](docs/screenshots), provided by the team. They show labeled Sample data mode, not proof of live model inference; some retain the former ReVise name.
+- **Scope:** native iOS is the working implementation. Android native AI is unfinished; older Android branches are leftovers, not submission code.
 
 ## Why local AI
 
@@ -26,24 +36,31 @@ iPhone 13 is tight). Decoding is greedy, so there is no temperature to tune.
 
 ## Network
 
-None at runtime. Models are fetched once on the developer Mac by `ios-native/fetch-models.sh` and bundled
-into the app. Missing assets show an error and never trigger a download. TODO: confirm with the airplane mode
-run in DEMO.md; for Android, confirm the release manifest has no INTERNET permission.
+No network is required for native iOS inference. Models are fetched once on the developer Mac by
+`ios-native/fetch-models.sh` and bundled into the app. Missing assets show an error and never trigger a
+download. Developer dependency/model downloads require internet; viewing the video/post also requires
+internet. Copy/Share is user initiated, and the chosen destination may upload or sync exported text.
+No hosted inference API, application backend, account or API key is required.
+TODO: document the airplane-mode run with Sample data off from DEMO.md. Android is not a completed native-AI submission target.
 
 ## Existing code and assets
 
 - Moonshine and llama.cpp packages as listed above.
 - Mock engine and sample conversations are our own and are labelled "Demo / Sample data" in the app.
-- TODO: list any SDK sample code that was reused.
+- Flutter packages include `share_plus`, `liquid_glass_renderer` and `cupertino_icons`; see `pubspec.lock` for resolved dependencies.
+- Team-provided screenshots and repository app-icon/brand assets are used in the README.
+- TODO: confirm any additional SDK sample-code reuse and include the required dependency/model notices before binary distribution.
 
 ## AI development tools used
 
 - Claude Code (Anthropic) for the iOS native engine work, the meeting AI logic, tests and docs.
-- TODO: the team lists every other tool used (for example Claude Design for the mockups, Codex, Copilot).
+- OpenAI Codex and Claude Design, confirmed by the team.
+- OpenCode; GPT-6.1 Sol (OpenAI) assisted with the submission README and repository cleanup.
+- Development/design tools are not inference services used by the running app.
 
 ## What is real and what is not (disclosures)
 
-- **Live capture:** real on device (Moonshine). Sample data mode is scripted and clearly labelled.
+- **Live capture:** native iOS uses Moonshine on device. Sample data mode is scripted, clearly labelled and on by default; turn it off to evaluate the real models.
 - **Summary, suggested questions and Ask:** real on device (Qwen 2.5 1.5B).
 - **Clean transcript:** rule based, no model.
 - **CRM cards:** not part of the product. The first PRD planned them; they were dropped.
@@ -57,8 +74,10 @@ run in DEMO.md; for Android, confirm the release manifest has no INTERNET permis
 ## Submission readiness checklist
 
 - [ ] Official portal, timezone and rules re-confirmed (cutoff reported as 10:00 AM PHT on Oct 10, one submission).
-- [ ] Demo video, about 1 minute, recorded in airplane mode (see DEMO.md).
-- [ ] Post and tags (#AppBuildersPH) per the confirmed rules.
-- [ ] Repository accessible to judges; PR from `zrs/ios` merged or the demo branch named.
+- [x] Demo video URL supplied: https://www.youtube.com/watch?v=KkFTXzSQAEE
+- [x] LinkedIn post URL supplied: https://lnkd.in/p/g9My36rK
+- [x] Working `zrs/ios` implementation included on `main`.
+- [ ] Airplane-mode real-model demonstration, post tags and official rules verified (see DEMO.md).
+- [x] Repository made public and unauthenticated GitHub access verified for judges.
 - [ ] Model and SDK license notices included.
 - [ ] Measured numbers above filled in on the stage phone.
