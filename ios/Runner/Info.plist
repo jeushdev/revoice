@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>ReVise</string>
+	<string>ReVoice</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>ReVise listens to the conversation to show live captions. Audio is processed on this phone and never uploaded.</string>
 	<key>CFBundleExecutable</key>
