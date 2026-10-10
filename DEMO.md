@@ -1,4 +1,4 @@
-# ReVise demo script (about 1 minute)
+# ReVoice demo script (about 1 minute)
 
 ## Before going on stage
 

@@ -150,14 +150,14 @@ class _LiveScreenState extends State<LiveScreen> {
               iconColor: context.rc.err,
               iconBg: context.rc.errc,
               title: 'Microphone access is off',
-              body: 'ReVise needs the microphone to caption.',
+              body: 'ReVoice needs the microphone to caption.',
               actions: [
                 PrimaryButton(
                   label: 'Open Settings',
                   onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text(
-                        'Open Settings > ReVise > Microphone, then tap Retry.',
+                        'Open Settings > ReVoice > Microphone, then tap Retry.',
                       ),
                     ),
                   ),

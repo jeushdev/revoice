@@ -1,10 +1,10 @@
-# ReVise submission notes
+# ReVoice submission notes
 
 Team LarpCode, AppBuildersPH Hackathon 2026 (Local AI). Fill the items marked TODO before submitting.
 
 ## Why local AI
 
-| Reason | ReVise |
+| Reason | ReVoice |
 | --- | --- |
 | Impossible with cloud-only | Works in airplane mode. No signal, captions and summary still work. |
 | Private | No app-initiated upload of conversation audio or text. Audio never leaves the native layer; Dart only sees text. |

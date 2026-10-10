@@ -1,4 +1,4 @@
-# ReVise
+# ReVoice
 
 Offline live captions for face-to-face conversations, with speaker labels, a clean
 transcript, an on-device summary and "Ask the meeting". All AI runs on the phone.

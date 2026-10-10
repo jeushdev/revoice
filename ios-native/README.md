@@ -17,7 +17,7 @@ and answers `model_missing`.
 2. Xcode: File > Add Package Dependencies > `https://github.com/moonshine-ai/moonshine-swift.git`,
    rule **Exact Version 0.1.5**, add product `MoonshineVoice` to the **Runner** target.
 3. Runner target > Info tab: add `Privacy - Microphone Usage Description`
-   ("ReVise listens to the conversation to caption it. Audio never leaves this phone.").
+   ("ReVoice listens to the conversation to caption it. Audio never leaves this phone.").
 4. In `AppDelegate.swift`, register once at launch. Use the one that matches the generated file:
    - Classic template (`GeneratedPluginRegistrant.register(with: self)` inside `didFinishLaunchingWithOptions`):
      ```swift

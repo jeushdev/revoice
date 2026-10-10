@@ -9,7 +9,7 @@
 	<key>CFBundleDisplayName</key>
 	<string>ReVoice</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ReVise listens to the conversation to show live captions. Audio is processed on this phone and never uploaded.</string>
+	<string>ReVoice listens to the conversation to show live captions. Audio is processed on this phone and never uploaded.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

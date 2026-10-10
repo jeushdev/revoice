@@ -115,7 +115,7 @@ class _NamesSheetState extends State<_NamesSheet> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Optional. Names help ReVise tell speakers apart afterwards. '
+                'Optional. Names help ReVoice tell speakers apart afterwards. '
                 'They stay on this phone.',
                 style: TextStyle(fontSize: 15, height: 1.3, color: c.ink2),
               ),

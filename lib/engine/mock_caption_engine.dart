@@ -177,7 +177,7 @@ class MockCaptionEngine implements CaptionEngine {
     }
     // Only mentions what the (possibly short) transcript contains.
     final parts = [
-      'A LarpCode team check-in about the ReVise demo.',
+      'A LarpCode team check-in about the ReVoice demo.',
       if (prompt.contains('demo deck'))
         'Zairus asked Sam for the demo deck by Friday.',
       if (prompt.contains('caption screen'))
@@ -228,7 +228,7 @@ class MockCaptionEngine implements CaptionEngine {
     }
     if (q.contains('about')) {
       return found(
-        'Planning the ReVise demo: who owns the deck, the caption screen and '
+        'Planning the ReVoice demo: who owns the deck, the caption screen and '
         'the launch timeline.',
         ['s-0001', 's-0003', 's-0007'],
       );

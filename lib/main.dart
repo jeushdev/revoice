@@ -21,7 +21,7 @@ class ReviseApp extends StatelessWidget {
     return AppScope(
       app: app,
       child: MaterialApp(
-        title: 'ReVise',
+        title: 'ReVoice',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(Brightness.light),
         darkTheme: buildTheme(Brightness.dark),
